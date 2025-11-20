@@ -1,0 +1,8 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EasyCPU.vNext.ViewModels"
+             xmlns:views="clr-namespace:EasyCPU.vNext.Views"
+             x:DataType="vm:MainWindowViewModel"
+             x:Class="EasyCPU.vNext.Views.MainView">
+    <views:MainEditorView x:Name="MainEditorViewControl" />
+</UserControl>

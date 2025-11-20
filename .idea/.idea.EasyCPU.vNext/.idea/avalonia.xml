@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AvaloniaProject">
+    <option name="projectPerEditor">
+      <map>
+        <entry key="AvaloniaEdit.Demo/App.xaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+        <entry key="EasyCPU.vNext/App.axaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+        <entry key="EasyCPU.vNext/App.xaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+        <entry key="EasyCPU.vNext/Views/MainEditorView.xaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+        <entry key="EasyCPU.vNext/Views/MainEditorView1.axaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+        <entry key="EasyCPU.vNext/Views/MainView.axaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+        <entry key="EasyCPU.vNext/Views/MainWindow.axaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+        <entry key="EasyCPU.vNext/Views/MainWindow.xaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+        <entry key="EasyCPU.vNext/Views/MainWindow1.axaml" value="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+      </map>
+    </option>
+  </component>
+</project>
