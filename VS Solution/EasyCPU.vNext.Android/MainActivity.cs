@@ -1,8 +1,6 @@
-﻿using Android.App;
+using Android.App;
 using Android.Content.PM;
-using Avalonia;
 using Avalonia.Android;
-using ReactiveUI.Avalonia;
 
 namespace EasyCPU.vNext.Android;
 
@@ -12,12 +10,6 @@ namespace EasyCPU.vNext.Android;
     Icon = "@drawable/icon",
     MainLauncher = true,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
-public class MainActivity : AvaloniaMainActivity<App>
+public class MainActivity : AvaloniaMainActivity
 {
-    protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
-    {
-        return base.CustomizeAppBuilder(builder)
-            .WithInterFont()
-            .UseReactiveUI();
-    }
 }

@@ -20,6 +20,6 @@ public partial class AppDelegate : AvaloniaAppDelegate<App>
     {
         return base.CustomizeAppBuilder(builder)
             .WithInterFont()
-            .UseReactiveUI();
+            .UseReactiveUI(_ => { });
     }
 }

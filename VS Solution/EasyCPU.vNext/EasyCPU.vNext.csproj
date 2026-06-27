@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -23,20 +23,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Resources\SampleFiles\**\*" />
+    <PackageReference Include="Avalonia" Version="12.0.5" />
+<PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <PackageReference Include="ReactiveUI.Avalonia" Version="12.0.3" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <PackageReference Include="AvaloniaEdit.TextMate" Version="12.0.0" />
+    <PackageReference Include="Dock.Avalonia" Version="12.0.0.2" />
+    <PackageReference Include="Dock.Model.ReactiveUI" Version="12.0.0.2" />
+    <PackageReference Include="Dock.Serializer.SystemTextJson" Version="12.0.0.2" />
+    <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="12.0.0.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Resources\SampleFiles\source.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.9" />
-    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.9" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.9" />
-    <PackageReference Include="ReactiveUI.Avalonia" Version="11.3.8" />
-    <ProjectReference Include="..\AvaloniaEdit\AvaloniaEdit.csproj" />
-    <ProjectReference Include="..\AvaloniaEdit.TextMate\AvaloniaEdit.TextMate.csproj" />
+    <ProjectReference Include="..\EasyCpu.Assembler\EasyCpu.Assembler.csproj" />
+    <ProjectReference Include="..\EasyCpu.Backend\EasyCpu.Backend.csproj" />
   </ItemGroup>
 
 </Project>
