@@ -11,10 +11,10 @@ namespace EasyCpu.Assembler.Processore
     public class Cpu
     {
 
-        static string[] nomiRegs =
+        static readonly string[] nomiRegs =
         {
-        "AX", "BX", "CX", "DX", "SI", "DI", "BP", "SP", "IP",
-    };
+            "AX", "BX", "CX", "DX", "SI", "DI", "BP", "SP", "IP",
+        };
 
         public enum StatoCpu
         {
@@ -23,94 +23,69 @@ namespace EasyCpu.Assembler.Processore
             Ferma
         }
 
-
-
         // bit del registro dei flags
         const short ZF = 1;
         const short SF = 2;
         const short OF = 4;
 
-        const short TUTTI = (ZF | SF | OF); // maschera che include tutti i flag
+        const short TUTTI = (ZF | SF | OF);
 
         // registri
-        static short ax;        // accumulatore
-        static short bx;        // accumulatore secondario
-        static short cx;        // contatore
-        static short dx;
+        short ax;
+        short bx;
+        short cx;
+        short dx;
 
-        static short sp;        // indice inizio dello stack (stack pointer)
-        static short bp;        // indice corrente dello stack (base pointer) 
-        static short ip;        // program counter
+        short sp;
+        short bp;
+        short ip;
 
-        static short si;        // indice sorgente
-        static short di;        // indice destinazione
+        short si;
+        short di;
 
-        static short flags; // flags
+        short flags;
 
-        public static bool stop;            // flag di arresto del programma
-        public static int inTrap;           // istruzione in fase di trap
-        static int loopInfinito;            // per la verifica di un loop infinito	
-        public static StatoCpu Stato = StatoCpu.Ferma;
+        public bool stop;
+        int loopInfinito;
+        public StatoCpu Stato = StatoCpu.Ferma;
 
-        // public static readonly int MASSIMO_INDIRIZZO = 255;
-        // public static readonly int INDIRIZZO_STACK = 240;
+        Ram memoria = new Ram();
+        List<Instruction> Code;
+        Instruction curIstruzione;
 
-        static Ram memoria = new Ram();
-        //static int[] memoria = new int[MASSIMO_INDIRIZZO+1];	// memoria 
-        static string[] ri = new string[3];     // registro istruzione corrente
+        public HashSet<int> Breakpoints { get; } = new();
 
-        static List<Instruction> Code;
-        static Instruction curIstruzione;
-
-        public static bool IPOverRun
+        public bool IPOverRun
         {
             get { return ip > Code.Count || ip < 1; }
         }
 
+        public short IP => ip;
+        public short SP => sp;
+        public short AX => ax;
+        public short BX => bx;
+        public short CX => cx;
+        public short DX => dx;
+        public short SI => si;
+        public short DI => di;
+        public short BP => bp;
 
-        public static short IP
-        {
-            get { return ip; }
-        }
+        public bool FlagSegno => TestFlag(SF);
+        public bool FlagZero => TestFlag(ZF);
+        public bool FlagOverflow => TestFlag(OF);
 
-        public static bool FlagSegno
-        {
-            get { return TestFlag(SF); }
-        }
-
-        public static bool FlagZero
-        {
-            get { return TestFlag(ZF); }
-        }
-
-        public static bool FlagOverflow
-        {
-            get { return TestFlag(OF); }
-        }
-
-        public static void Run(int IP)
+        public void Run(int IP)
         {
             ip = (short)IP;
             Run();
         }
 
-        static bool Trap()
+        static bool LoopInfinito(int numIstruzioni, int limite)
         {
-            return curIstruzione != null && curIstruzione.Trap == true;
+            return limite > 0 && numIstruzioni == limite;
         }
 
-        // ! codice sperimentale
-        public static void SetTrap(int riga)
-        {
-            Code[riga].Trap = true;
-        }
-
-        static bool LoopInfinito(int numIstruzioni)
-        {
-            return loopInfinito > 0 && numIstruzioni == loopInfinito;
-        }
-
-        public static void Run()
+        public void Run()
         {
             Stato = StatoCpu.Attiva;
             int numIstruzioni = 0;
@@ -118,13 +93,10 @@ namespace EasyCpu.Assembler.Processore
             {
                 while (!stop)
                 {
-                    Fetch();
-                    if (Trap() && !(ip == inTrap))  // gestione trap (non catturata dal catch)
-                    {
-                        inTrap = ip;
+                    if (Breakpoints.Contains(ip))
                         throw new CpuTrapException();
-                    }
 
+                    Fetch();
                     Execute();
 
                     if (ip == Code.Count)
@@ -133,23 +105,20 @@ namespace EasyCpu.Assembler.Processore
                     if (IPOverRun)
                         throw new CpuException(CodiceErrore.IPNonValido);
 
-
                     numIstruzioni++;
-                    if (LoopInfinito(numIstruzioni))
-                    {
+                    if (LoopInfinito(numIstruzioni, loopInfinito))
                         throw new CpuLoopException();
-                    }
                 }
             }
-            catch (CpuException)    // non cattura TrapException e LoopException
+            catch (CpuException)
             {
                 Stop();
                 throw;
             }
         }
 
-
-        public static void Debug()
+        // Singolo step senza verifica breakpoint (usa per avanzare dopo un trap)
+        public void StepInto()
         {
             if (stop) return;
             Stato = StatoCpu.Attiva;
@@ -163,40 +132,100 @@ namespace EasyCpu.Assembler.Processore
                 Stop();
                 throw;
             }
-
             if (ip == Code.Count)
                 Stop();
         }
 
-        public static void Init(List<Instruction> codice, List<int> memoriaDati, bool initRegs, int AloopInfinito)
+        // Esegue finché sp < limite, controllando breakpoint e loop infinito
+        void RunWhileInside(short limite)
+        {
+            int numIstruzioni = 0;
+            while (!stop && sp < limite)
+            {
+                if (Breakpoints.Contains(ip))
+                    throw new CpuTrapException();
+
+                Fetch();
+                Execute();
+
+                if (ip == Code.Count) { Stop(); break; }
+                if (IPOverRun) throw new CpuException(CodiceErrore.IPNonValido);
+
+                numIstruzioni++;
+                if (LoopInfinito(numIstruzioni, loopInfinito))
+                    throw new CpuLoopException();
+            }
+        }
+
+        public void StepOver()
+        {
+            if (stop) return;
+            // Se l'istruzione corrente non è una call, fa semplicemente StepInto
+            if (Code[ip].Code != "call")
+            {
+                StepInto();
+                return;
+            }
+            short S = sp;
+            Stato = StatoCpu.Attiva;
+            try
+            {
+                Fetch();
+                Execute(); // esegue la call: sp diminuisce, ip salta alla subroutine
+                if (ip == Code.Count) { Stop(); return; }
+                RunWhileInside(S); // continua finché sp < S (cioè siamo dentro la subroutine)
+            }
+            catch (CpuException)
+            {
+                Stop();
+                throw;
+            }
+        }
+
+        // Esegue finché sp <= S (cioè siamo ancora dentro o più in profondità):
+        // RunWhileInside(S+1) → loop while sp < S+1 → while sp <= S
+        public void StepOut()
+        {
+            if (stop) return;
+            short S = sp;
+            Stato = StatoCpu.Attiva;
+            try
+            {
+                RunWhileInside((short)(S + 1));
+            }
+            catch (CpuException)
+            {
+                Stop();
+                throw;
+            }
+        }
+
+        public void Init(List<Instruction> codice, List<int> memoriaDati, bool initRegs, int AloopInfinito)
         {
             stop = false;
             memoria.Imposta(memoriaDati);
             Code = codice;
             ip = 0;
             flags = 0;
-            inTrap = -1;
             sp = (short)(Ram.MASSIMO_INDIRIZZO + 1);
-
             loopInfinito = AloopInfinito;
             Stato = StatoCpu.Pronta;
             if (initRegs)
                 InizializzaRegs();
         }
 
-        static void InizializzaRegs()
+        void InizializzaRegs()
         {
             ax = bx = cx = dx = si = di = bp = 0;
             flags = 0;
         }
 
-
-        public static void Fetch()
+        void Fetch()
         {
             curIstruzione = Code[ip];
         }
 
-        public static void Execute()
+        void Execute()
         {
             switch (curIstruzione.Code)
             {
@@ -240,10 +269,9 @@ namespace EasyCpu.Assembler.Processore
             ip++;
         }
 
-        #region metodi che implementano le istruzioni
+        #region istruzioni
 
-
-        static void And()
+        void And()
         {
             int op = LoadOp(1);
             op &= LoadOp(2);
@@ -252,7 +280,7 @@ namespace EasyCpu.Assembler.Processore
             SetFlag(OF, false);
         }
 
-        static void Or()
+        void Or()
         {
             int op = LoadOp(1);
             op |= LoadOp(2);
@@ -261,7 +289,7 @@ namespace EasyCpu.Assembler.Processore
             SetFlag(OF, false);
         }
 
-        static void Xor()
+        void Xor()
         {
             short op = LoadOp(1);
             op ^= LoadOp(2);
@@ -270,14 +298,14 @@ namespace EasyCpu.Assembler.Processore
             SetFlag(OF, false);
         }
 
-        static void Not()
+        void Not()
         {
             int op = LoadOp(1);
             op = (short)~op;
             StoreOp(op, 1);
         }
 
-        static void Neg()
+        void Neg()
         {
             short op = LoadOp(1);
             op = (short)(0 - op);
@@ -285,17 +313,17 @@ namespace EasyCpu.Assembler.Processore
             SetFlags(op);
         }
 
-        static void Mov()
+        void Mov()
         {
             StoreOp(LoadOp(2), 1);
         }
 
-        static void Movs()
+        void Movs()
         {
             memoria[di] = memoria[si];
         }
 
-        static void Add()
+        void Add()
         {
             int op = LoadOp(1);
             op += LoadOp(2);
@@ -303,7 +331,7 @@ namespace EasyCpu.Assembler.Processore
             SetFlags(op);
         }
 
-        static void Sub()
+        void Sub()
         {
             int op = LoadOp(1);
             op -= LoadOp(2);
@@ -311,7 +339,7 @@ namespace EasyCpu.Assembler.Processore
             SetFlags(op);
         }
 
-        static void IMul()
+        void IMul()
         {
             int tmp = ax * LoadOp(1);
             ax = (short)tmp;
@@ -319,14 +347,14 @@ namespace EasyCpu.Assembler.Processore
             SetFlags(OF + ZF, tmp);
         }
 
-        static void IDiv()
+        void IDiv()
         {
             int dividendo = ax + (dx << 16);
             dx = (short)(dividendo % LoadOp(1));
             ax = (short)(dividendo / LoadOp(1));
         }
 
-        static void Inc()
+        void Inc()
         {
             int op = LoadOp(1);
             op++;
@@ -334,7 +362,7 @@ namespace EasyCpu.Assembler.Processore
             SetFlags(op);
         }
 
-        static void Dec()
+        void Dec()
         {
             int op = LoadOp(1);
             op--;
@@ -342,85 +370,85 @@ namespace EasyCpu.Assembler.Processore
             SetFlags(op);
         }
 
-        static void Cmp()
+        void Cmp()
         {
             int op = LoadOp(1);
             op -= LoadOp(2);
             SetFlags(op);
         }
 
-        static void Jmp()
+        void Jmp()
         {
             ip = NuovoIp();
         }
 
-        static void Je()
+        void Je()
         {
             if (TestFlag(ZF))
                 ip = NuovoIp();
         }
 
-        static void Jne()
+        void Jne()
         {
             if (!TestFlag(ZF))
                 ip = NuovoIp();
         }
 
-        static void Jg()
+        void Jg()
         {
             if (TestFlag(SF) == TestFlag(OF) && !TestFlag(ZF))
                 ip = NuovoIp();
         }
 
-        static void Jge()
+        void Jge()
         {
             if (TestFlag(SF) == TestFlag(OF))
                 ip = NuovoIp();
         }
 
-        static void Jl()
+        void Jl()
         {
             if (TestFlag(SF) != TestFlag(OF))
                 ip = NuovoIp();
         }
 
-        static void Jle()
+        void Jle()
         {
             if (TestFlag(SF) != TestFlag(OF) || TestFlag(ZF))
                 ip = NuovoIp();
         }
 
-        static void Jcxz()
+        void Jcxz()
         {
             if (cx == 0)
                 ip = NuovoIp();
         }
 
-        static void Jo()
+        void Jo()
         {
             if (TestFlag(OF))
                 ip = NuovoIp();
         }
 
-        static void Jno()
+        void Jno()
         {
             if (!TestFlag(OF))
                 ip = NuovoIp();
         }
 
-        static void Js()
+        void Js()
         {
             if (TestFlag(SF))
                 ip = NuovoIp();
         }
 
-        static void Jns()
+        void Jns()
         {
             if (!TestFlag(SF))
                 ip = NuovoIp();
         }
 
-        static void PushCode(short valore)
+        void PushCode(short valore)
         {
             sp--;
             if (sp < Ram.INDIRIZZO_STACK)
@@ -428,46 +456,45 @@ namespace EasyCpu.Assembler.Processore
             memoria[sp] = valore;
         }
 
-        static short PopCode()
+        short PopCode()
         {
             if (sp == Ram.MASSIMO_INDIRIZZO + 1)
                 throw new CpuException(CodiceErrore.StackUnderflow);
             return memoria[sp++];
-
         }
 
-        static void Push()
+        void Push()
         {
             PushCode(LoadOp(1));
         }
 
-        static void Pop()
+        void Pop()
         {
             StoreOp(PopCode(), 1);
         }
 
-        static void PushF()
+        void PushF()
         {
             PushCode(flags);
         }
 
-        static void PopF()
+        void PopF()
         {
             flags = PopCode();
         }
 
-        static void Call()
+        void Call()
         {
             PushCode(ip);
             ip = NuovoIp();
         }
 
-        static void Ret()
+        void Ret()
         {
             ip = PopCode();
         }
 
-        static void Shl()       // non gestisce flag di overflow!
+        void Shl()
         {
             int op = LoadOp(1);
             op <<= LoadOp(2);
@@ -475,7 +502,7 @@ namespace EasyCpu.Assembler.Processore
             SetFlags(ZF + SF, op);
         }
 
-        static void Shr()       // non gestisce flag di overflow!
+        void Shr()
         {
             int op = LoadOp(1);
             op >>= LoadOp(2);
@@ -483,27 +510,26 @@ namespace EasyCpu.Assembler.Processore
             SetFlags(ZF + SF, op);
         }
 
-        static void Nop()
+        void Nop()
         {
         }
 
-        public static void Stop()
+        public void Stop()
         {
             stop = true;
             Stato = StatoCpu.Ferma;
         }
 
-        static short NuovoIp()
+        short NuovoIp()
         {
             return (short)(LoadOp(1) - 1);
         }
 
         #endregion
 
+        #region load/store/flags
 
-        #region metodi che caricano e memorizzano gli operandi e settano i flags
-
-        static short LoadOp(int numOp)
+        short LoadOp(int numOp)
         {
             if (numOp == 1)
                 return LoadOp(curIstruzione.Op1, curIstruzione.Offset1);
@@ -511,8 +537,7 @@ namespace EasyCpu.Assembler.Processore
                 return LoadOp(curIstruzione.Op2, curIstruzione.Offset2);
         }
 
-
-        static void StoreOp(int valore, int numOp)
+        void StoreOp(int valore, int numOp)
         {
             if (numOp == 1)
                 StoreOp((short)valore, curIstruzione.Op1, curIstruzione.Offset1);
@@ -520,7 +545,7 @@ namespace EasyCpu.Assembler.Processore
                 StoreOp((short)valore, curIstruzione.Op2, curIstruzione.Offset2);
         }
 
-        static short LoadOp(IdOp op, int offset)
+        short LoadOp(IdOp op, int offset)
         {
             switch (op)
             {
@@ -543,7 +568,7 @@ namespace EasyCpu.Assembler.Processore
             return -1;
         }
 
-        static void StoreOp(short valore, IdOp op, int offset)
+        void StoreOp(short valore, IdOp op, int offset)
         {
             switch (op)
             {
@@ -563,8 +588,7 @@ namespace EasyCpu.Assembler.Processore
             }
         }
 
-
-        static void SetFlags(short mask, int ris)
+        void SetFlags(short mask, int ris)
         {
             if ((ZF & mask) != 0)
                 flags = (short)(((short)ris == 0) ? flags | ZF : flags & ~ZF);
@@ -576,30 +600,29 @@ namespace EasyCpu.Assembler.Processore
                 flags = (short)((ris > short.MaxValue || ris < short.MinValue) ? flags | OF : flags & ~OF);
         }
 
-        static void SetFlags(int ris)
+        void SetFlags(int ris)
         {
             SetFlags(TUTTI, ris);
         }
 
-        static void SetFlag(int flag, bool stato)
+        void SetFlag(int flag, bool stato)
         {
             if (stato)
                 flags |= (short)flag;
             else
                 flags &= (short)~flag;
-
         }
 
-        public static bool TestFlag(int flag)
+        public bool TestFlag(int flag)
         {
             return (flags & flag) != 0;
         }
 
         #endregion
 
-        #region metodi di utilit�
+        #region dump / utilità
 
-        public static string DumpReg(int indReg)
+        public string DumpReg(int indReg)
         {
             string formatoReg;
             if (Ambiente.FormatoDati != FormatoValore.Hex)
@@ -621,7 +644,6 @@ namespace EasyCpu.Assembler.Processore
                 default: tmp = 0; break;
             }
             return string.Format(nomiRegs[indReg] + formatoReg, tmp, ShortToStrBin(tmp), IntToChar(tmp));
-
         }
 
         public static string ShortToStrBin(short valore)
@@ -639,18 +661,13 @@ namespace EasyCpu.Assembler.Processore
             s.Insert(0, r);
             while (s.Length < 16)
                 s.Insert(0, 0);
-
             return s.ToString();
-
         }
 
-        public static string[] DumpRegs()
+        public string[] DumpRegs()
         {
             string formatoReg = " = {0" + Ambiente.FR + "} ";
             string[] reg = new string[9];
-
-            string zfs = (TestFlag(ZF)) ? "Z" : "z";
-            string sfs = (TestFlag(SF)) ? "S" : "s";
 
             reg[0] = string.Format("AX" + formatoReg, ax);
             reg[1] = string.Format("BX" + formatoReg, bx);
@@ -661,8 +678,6 @@ namespace EasyCpu.Assembler.Processore
             reg[6] = string.Format("BP" + formatoReg, bp);
             reg[7] = string.Format("SP" + formatoReg, sp);
             reg[8] = string.Format("IP" + formatoReg, ip);
-            //reg[9] = "";
-            //reg[10] = string.Format("{0}  {1}", zfs, sfs);
             return reg;
         }
 
@@ -675,7 +690,7 @@ namespace EasyCpu.Assembler.Processore
             return Convert.ToChar(x).ToString();
         }
 
-        public static List<string> DumpMemoria(int da, int a, int colonne)
+        public List<string> DumpMemoria(int da, int a, int colonne)
         {
             if (memoria == null) return null;
             string formatoIndirizzo = "{0" + Ambiente.FI + "}: ";
@@ -700,21 +715,7 @@ namespace EasyCpu.Assembler.Processore
                 dump.Add(s);
             return dump;
         }
-        static void Errore(string msg)
-        {
-            Console.WriteLine("\a" + msg);
-        }
-
-
-        static void VisualizzaIstruzione()
-        {
-            Console.WriteLine("\n{0}\n", Code[ip]);
-        }
 
         #endregion
     }
-
-
-
-
 }

@@ -1,6 +1,6 @@
 using System;
-using System.Collections;
-using System.Drawing;
+using System.IO;
+using System.Collections.Generic;
 
 
 namespace EasyCpu.Common
@@ -19,24 +19,21 @@ namespace EasyCpu.Common
 		public const string NOMEFILENUOVO = "file1.as";
 		public const string NOMEFILEOPZIONI = "EasyCPU.opt";
 		public const string NOMEFILEFINESTRE = "Finestre.txt";
-		public const string PATHPROGETTI = "EasyCPU Progetti\\";
+		public const string PATHPROGETTI = "EasyCPU Progetti";
 		public const string NOMEFILERECENTI = "recenti.txt";
-
 
 		public const string FiltroFileDialog = "Easy CPU assembly (*.as)|*.as|Tutti i file (*.*)|*.*";
 
-		public static string DocumentiPath = Environment.GetFolderPath(Environment.SpecialFolder.Personal) + "\\";
-		public static string EasyCPUPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\EasyCPU\\";
-		public static string CurDir = Environment.CurrentDirectory + "\\";
-		//public static string NomeNuovoFile = DocumentiPath+NOMEFILENUOVO;
+		public static string DocumentiPath = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
+		public static string EasyCPUPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EasyCPU");
+		public static string CurDir = Environment.CurrentDirectory;
 		public static string NomeNuovoFile = NOMEFILENUOVO;
 		public static string PathCorrente = "";
 
-
-		public static string OpzioniNomeFile = EasyCPUPath + NOMEFILEOPZIONI;
-		public static string FinestreNomeFile = EasyCPUPath + NOMEFILEFINESTRE;
-		public static string RecentiNomeFile = EasyCPUPath + NOMEFILERECENTI;
-		public static string ProgettiPath = DocumentiPath + PATHPROGETTI;
+		public static string OpzioniNomeFile = Path.Combine(EasyCPUPath, NOMEFILEOPZIONI);
+		public static string FinestreNomeFile = Path.Combine(EasyCPUPath, NOMEFILEFINESTRE);
+		public static string RecentiNomeFile = Path.Combine(EasyCPUPath, NOMEFILERECENTI);
+		public static string ProgettiPath = Path.Combine(DocumentiPath, PATHPROGETTI);
 		public static bool PrimoTentativo = true;
 
 		// opzioni configurabili, memorizzate nel profilo dell'utente
@@ -72,26 +69,20 @@ namespace EasyCpu.Common
 		public static bool MostraMemoria;
 		public static string CHIAVE_MOSTRAMEMORIA = "MOSTRA_MEMORIA";
 
-		//public static Font Font = new Font("Courier new", 14);
-		//public static string FontEditorNome { get { return Font.Name; } }
-
 		public static string FontEditorNome;
-        public static string CHIAVE_FONTEDITORNOME = "FONT_EDITOR_NOME";
+		public static string CHIAVE_FONTEDITORNOME = "FONT_EDITOR_NOME";
 
-		//TODO: sistemare per lo stile del font
-		//public static float FontEditorSize { get {return Font.Size;}}
 		public static float FontEditorSize;
 		public static string CHIAVE_FONTEDITORSIZE = "FONT_EDITOR_SIZE";
 
-        public static int FontEditorStyle;
-        public static string CHIAVE_FONTEDITORSTYLE = "FONT_EDITOR_STYLE";
+		public static int FontEditorStyle;
+		public static string CHIAVE_FONTEDITORSTYLE = "FONT_EDITOR_STYLE";
 
 		public static float EditorZoomFactor;
 		public static string CHIAVE_FONTEDITOR_ZOOM = "FONT_EDITOR_ZOOM";
 
 		public static string VersioneAssembly;
 		public static string CHIAVE_VERSIONE = "VERSIONE";
-
 
 		public static string FI;
 		public static string FD;
@@ -114,8 +105,8 @@ namespace EasyCpu.Common
 			MostraMemoria = true;
 			FontEditorNome = "Courier new";
 			FontEditorSize = 14;
-            FontEditorStyle = 0;
-            EditorZoomFactor = 1.0f;
+			FontEditorStyle = 0;
+			EditorZoomFactor = 1.0f;
 			InizializzaRegistri = true;
 			LoopInfinito = 65535;
 			PienoSchermo = false;
@@ -142,7 +133,6 @@ namespace EasyCpu.Common
 					FD = ",5:0";
 					FR = ",5:0";
 				}
-
 			}
 		}
 
@@ -152,11 +142,6 @@ namespace EasyCpu.Common
 			if (pos != -1)
 				FileRecenti.RemoveAt(pos);
 			FileRecenti.Insert(0, path);
-			//if (FileRecenti.Count > MAXFILERECENTI)
-			//	FileRecenti.RemoveAt(FileRecenti.Count - 1);
 		}
-
-
-
 	}
 }

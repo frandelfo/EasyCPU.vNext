@@ -163,6 +163,37 @@
 - **`Stato` statico residuo** o altri campi dimenticati `static`: causano "stato condiviso" tra istanze. Cercare la keyword `static` in `Cpu.cs` a fine refactor.
 - **`Ram` resta con costanti `static readonly`** (`MASSIMO_INDIRIZZO`, `INDIRIZZO_STACK`): va bene, sono costanti; ma `memoria` è già d'istanza — assicurarsi che `Cpu` ne crei una nuova per ogni `Init`.
 
+### Assunzioni e decisioni (registrate durante l'esecuzione — 2026-06-28)
+
+> Queste note documentano scelte fatte durante l'implementazione che non erano
+> esplicitate nel piano originale e che impattano le fasi successive.
+
+1. **Contratto `StepInto` dopo un breakpoint (impatta Fase 3 — UI)**
+   `Run()` controlla `Breakpoints.Contains(ip)` **prima** di `Fetch`+`Execute`. Quando scatta
+   una `CpuTrapException`, `ip` rimane sull'istruzione del breakpoint (non ancora eseguita).
+   Per riprendere l'esecuzione, la UI (ViewModel, Fase 3) deve:
+   - Chiamare `StepInto()` una volta (avanza oltre il breakpoint senza ri-verifica).
+   - Poi chiamare `Run()` o un altro comando di debug.
+   Non fare `Run()` direttamente dopo il trap: re-triggherebbe immediatamente lo stesso breakpoint.
+
+2. **`RunWhileInside(short limite)` — semantica: `sp < limite`**
+   L'helper privato esegue passi finché `sp < limite`.
+   - `StepOver` lo chiama con `limite = S` (SP pre-call): esegue mentre si è dentro la subroutine (`sp < S`), si ferma quando il `ret` riporta `sp == S`.
+   - `StepOut` lo chiama con `limite = S + 1` (SP corrente + 1): equivale a "finché `sp ≤ S`", si ferma quando un `ret` porta `sp > S`.
+   Questa simmetria (`StepOut = RunWhileInside(sp + 1)`) non era nel piano originale ma è verificata dai test.
+
+3. **`PreparaRiga` invariato — marker commento `//` confermato**
+   `AdattaRiga` in `Parser.cs` usava `'` come marcatore di commento (dead code rimosso).
+   Il vero marker di commento è `//`, gestito da `Compiler.PreparaRiga`. La logica è stata
+   mantenuta identica all'originale. Il `'` dentro `PreparaRiga` serve solo a rilevare
+   costanti carattere (per non convertire in minuscolo il char tra apici).
+
+4. **Mapping 0-based/1-based da gestire in Fase 3**
+   `indRiga` nel compilatore e `InstrToLineMap`/`LineToInstrMap` usano indici **0-based**.
+   AvaloniaEdit usa righe **1-based** (Fase 3, `BreakpointMargin` e `DebugCurrentLineRenderer`).
+   La conversione `lineaAvaloniaEdit = indRiga + 1` va fatta **una sola volta** nell'adapter
+   UI, mai nel core. Non introdurre offset nei test del core.
+
 ---
 
 ## FASE 2 — Dock + struttura ViewModel

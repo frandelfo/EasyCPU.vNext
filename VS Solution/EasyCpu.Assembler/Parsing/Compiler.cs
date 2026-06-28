@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,17 +12,20 @@ namespace EasyCpu.Assembler.Parsing
 {
     public class Compiler
     {
-        static List<IndirizzoEtichetta> TabellaEtichette;
-        public static List<int> TabellaDebug;
+        readonly Parser _parser = new();
+        List<IndirizzoEtichetta> _tabellaEtichette;
+
+        public List<int> InstrToLineMap { get; private set; }  // indice istruzione → riga sorgente (0-based)
+        public int[] LineToInstrMap { get; private set; }      // riga sorgente (0-based) → indice istruzione (-1 se non eseguibile)
 
         static bool SeCommento(string s)
         {
             return s[0] == '\'';
         }
 
-        public static List<int> CompilaDati(List<string> data, ref List<CompilerError> errori)
+        public List<int> CompilaDati(List<string> data, ref List<CompilerError> errori)
         {
-            List<int>memoria = new int[Ram.MASSIMO_INDIRIZZO + 1].ToList();
+            List<int> memoria = new int[Ram.MASSIMO_INDIRIZZO + 1].ToList();
             for (int indRiga = 0; indRiga < data.Count; indRiga++)
             {
                 try
@@ -30,22 +33,18 @@ namespace EasyCpu.Assembler.Parsing
                     int indirizzo;
                     string s = PreparaRiga(data[indRiga]);
                     if (s == "") continue;
-                    List<int> rigaDati = Parser.CompilaDati(s, indRiga, out indirizzo);
+                    List<int> rigaDati = _parser.CompilaDati(s, indRiga, out indirizzo);
                     if (rigaDati.Count + indirizzo > Ram.MASSIMO_INDIRIZZO)
                         throw new CodiceException(CodiceErrore.IntervalloIndirizzoDati);
 
                     for (int i = 0; i < rigaDati.Count; i++)
-                    {
                         memoria[indirizzo + i] = rigaDati[i];
-                    }
-
-                    //Array.Copy(rigaDati, 0, memoria, indirizzo, rigaDati.Count);
                 }
                 catch (CodiceException e)
                 {
                     if (errori == null)
                         errori = new List<CompilerError>();
-                    errori.Add(new CompilerError(Errori.Msg(e.err), indRiga, Parser.IndCar, CompilerError.DATI));
+                    errori.Add(new CompilerError(Errori.Msg(e.err), indRiga, _parser.IndCar, CompilerError.DATI));
                 }
             }
             if (errori == null)
@@ -78,17 +77,14 @@ namespace EasyCpu.Assembler.Parsing
             return riga;
         }
 
-        public static List<Instruction> CompilaCodice(List<string> code, ref List<CompilerError> errori, int rigaTrap)
+        public List<Instruction> CompilaCodice(List<string> code, ref List<CompilerError> errori)
         {
             if (code == null || code.Count == 0) return null;
-            bool messoTrap = false; // consente di mettere un solo trap
-            if (rigaTrap == -1) messoTrap = true; // evita l'impostazione del trap
             int indiceEtichetta;
             List<Instruction> istruzioni = new List<Instruction>();
             List<IndirizzoEtichetta> etichette = new List<IndirizzoEtichetta>();
             List<int> debug = new List<int>();
 
-            //codice = null;		
             for (int indRiga = 0; indRiga < code.Count; indRiga++)
             {
                 try
@@ -96,23 +92,17 @@ namespace EasyCpu.Assembler.Parsing
                     string s = PreparaRiga(code[indRiga]);
                     string etichetta;
                     if (s == "") continue;
-                    Instruction istr = Parser.Compila(s, out etichetta);
+                    Instruction istr = _parser.Compila(s, out etichetta);
 
                     if (istr != null)
                     {
-                        if (indRiga >= rigaTrap && !messoTrap)
-                        {
-                            istr.Trap = true;
-                            messoTrap = true;
-                        }
                         istr.indRiga = indRiga;
                         istruzioni.Add(istr);
-
                         debug.Add(indRiga);
-                        indiceEtichetta = istruzioni.Count - 1; // indica l'istruzione corrente
+                        indiceEtichetta = istruzioni.Count - 1;
                     }
                     else
-                        indiceEtichetta = istruzioni.Count; // indica la prossima istruzione disponibile
+                        indiceEtichetta = istruzioni.Count;
 
                     if (etichetta != null)
                         etichette.Add(new IndirizzoEtichetta(etichetta, indiceEtichetta));
@@ -121,15 +111,15 @@ namespace EasyCpu.Assembler.Parsing
                 {
                     if (errori == null)
                         errori = new List<CompilerError>();
-                    errori.Add(new CompilerError(Errori.Msg(e.err), indRiga, Parser.IndCar, CompilerError.CODICE));
+                    errori.Add(new CompilerError(Errori.Msg(e.err), indRiga, _parser.IndCar, CompilerError.CODICE));
                 }
             }
 
-            TabellaEtichette = etichette;
-            // esamina e completa i riferimenti alle etichette
+            _tabellaEtichette = etichette;
+            // risolve i riferimenti alle etichette
             for (int indRiga = 0; indRiga < istruzioni.Count; indRiga++)
             {
-                Instruction istr = (Instruction)istruzioni[indRiga];
+                Instruction istr = istruzioni[indRiga];
                 if (istr.Etichetta == null) continue;
                 istr.Offset1 = CercaEtichetta(istr.Etichetta);
                 if (istr.Offset1 == -1)
@@ -139,26 +129,33 @@ namespace EasyCpu.Assembler.Parsing
                     errori.Add(new CompilerError(Errori.Msg(CodiceErrore.EtichettaNonValida), istr.indRiga, -1, CompilerError.CODICE));
                 }
                 istruzioni[indRiga] = istr;
-
             }
+
             if (errori == null && istruzioni.Count > 0)
             {
-                TabellaDebug = debug;
+                InstrToLineMap = debug;
+                BuildLineToInstrMap(code.Count, debug);
                 return istruzioni;
             }
             else
                 return null;
         }
 
-        static int CercaEtichetta(string s)
+        void BuildLineToInstrMap(int totalLines, List<int> debug)
         {
-            for (int i = 0; i < TabellaEtichette.Count; i++)
-                if (s == TabellaEtichette[i].Etichetta)
-                    return TabellaEtichette[i].Indirizzo;
-
-            return -1;
+            int[] map = new int[totalLines];
+            for (int i = 0; i < totalLines; i++) map[i] = -1;
+            for (int instrIdx = 0; instrIdx < debug.Count; instrIdx++)
+                map[debug[instrIdx]] = instrIdx;
+            LineToInstrMap = map;
         }
 
+        int CercaEtichetta(string s)
+        {
+            for (int i = 0; i < _tabellaEtichette.Count; i++)
+                if (s == _tabellaEtichette[i].Etichetta)
+                    return _tabellaEtichette[i].Indirizzo;
+            return -1;
+        }
     }
-
 }

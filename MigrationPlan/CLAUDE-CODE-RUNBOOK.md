@@ -102,12 +102,17 @@ I dettagli completi (passi puntuali, problemi noti) sono in `GUIDA-SVILUPPO.md`:
 - **Gate**: `dotnet build` 0 errori, 0 NU1605; `dotnet run` Desktop apre una finestra-scheletro.
 - **Attenzione**: `App.xaml` ha uno `StyleInclude` `avares://AvaloniaEdit/...` — verifica che risolva ancora col NuGet; `.Desktop.csproj` ha un `ProjectReference` duplicato da rimuovere.
 
-### Fase 1 — Core a istanze + breakpoint + fix cross-platform
+### Fase 1 — Core a istanze + breakpoint + fix cross-platform ✅ COMPLETATA (2026-06-28)
 - **Tocca**: `EasyCpu.Assembler/*` (Cpu, Compiler, Parser, Instruction), `EasyCpu.Backend/Local/Storage.cs`, `EasyCpu.Common/Ambiente.cs`; nuovo progetto `EasyCpu.Assembler.Tests`.
 - **Non toccare**: la UI.
 - **DoD**: core istanziabile; `HashSet<int> Breakpoints`; `StepOver/StepOut/RunWhileInside` corretti (stack discendente, guarda `code[ip]`); `InstrToLineMap`+`LineToInstrMap`; rimossi `Trap/SetTrap/rigaTrap`; path con `Path.Combine`; rimossi `using System.Drawing`.
 - **Gate**: `dotnet test` verde con i test elencati in `GUIDA-SVILUPPO.md` Fase 1 (Step Into/Over/Out, breakpoint multipli, mapping righe, isolamento istanze).
 - **Attenzione**: l'errore classico è invertire il verso dello stack — usa il test `step_over_call` come prova del nove.
+- **Assunzioni registrate** (dettagli in `GUIDA-SVILUPPO.md` §Fase 1 → "Assunzioni e decisioni"):
+  1. Dopo `CpuTrapException`, la UI deve chiamare `StepInto()` prima di `Run()` (non `Run()` direttamente).
+  2. `RunWhileInside(limite)` usa `sp < limite`; `StepOut` passa `sp+1`.
+  3. Marker commento `//` confermato in `PreparaRiga`; `'` serve solo per costanti char.
+  4. Indici core 0-based; conversione a 1-based (AvaloniaEdit) va fatta solo nella UI in Fase 3.
 
 ### Fase 2 — Dock + ViewModel
 - **Tocca**: `EasyCPU.vNext/` (DockFactory, ViewModel dei pannelli, MainViewModel, registrazione DataTemplate, serializer layout).

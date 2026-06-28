@@ -9,96 +9,88 @@ namespace EasyCpu.Assembler.Parsing
 {
 	public class Parser
 	{
-		public static OpCode[] SetCode =
+		public static readonly OpCode[] SetCode =
 		{
-
-		new OpCode("mov", 2),
-		new OpCode("movs", 0),
-		new OpCode("add", 2),
-		new OpCode("sub", 2),
-		new OpCode("cmp", 2),
-		new OpCode("and", 2),
-		new OpCode("or", 2),
-		new OpCode("xor", 2),
-		new OpCode("not", 1),
-		new OpCode("neg", 1),
-		new OpCode("mul", 1),
-		new OpCode("div", 1),
-		new OpCode("inc", 1),
-		new OpCode("dec", 1),
-		new OpCode("push", 1),
-		new OpCode("pop", 1),
-		new OpCode("pushf", 0),
-		new OpCode("popf", 0),
-		new OpCode("call", 1, TipoOp.Codice),
-		new OpCode("jcxz", 1, TipoOp.Codice),
-		new OpCode("je", 1, TipoOp.Codice),
-		new OpCode("jg", 1, TipoOp.Codice),
-		new OpCode("jl", 1, TipoOp.Codice),
-		new OpCode("jle", 1, TipoOp.Codice),
-		new OpCode("jge", 1, TipoOp.Codice),
-		new OpCode("jmp", 1, TipoOp.Codice),
-		new OpCode("jne", 1, TipoOp.Codice),
-		new OpCode("jo", 1, TipoOp.Codice),
-		new OpCode("jno", 1, TipoOp.Codice),
-		new OpCode("js", 1, TipoOp.Codice),
-		new OpCode("jns", 1, TipoOp.Codice),
-		new OpCode("ret", 0),
-		new OpCode("nop", 0),
-		new OpCode("stop", 0),
-		new OpCode("shl", 2),
-		new OpCode("shr", 2),
-
-	};
+			new OpCode("mov", 2),
+			new OpCode("movs", 0),
+			new OpCode("add", 2),
+			new OpCode("sub", 2),
+			new OpCode("cmp", 2),
+			new OpCode("and", 2),
+			new OpCode("or", 2),
+			new OpCode("xor", 2),
+			new OpCode("not", 1),
+			new OpCode("neg", 1),
+			new OpCode("mul", 1),
+			new OpCode("div", 1),
+			new OpCode("inc", 1),
+			new OpCode("dec", 1),
+			new OpCode("push", 1),
+			new OpCode("pop", 1),
+			new OpCode("pushf", 0),
+			new OpCode("popf", 0),
+			new OpCode("call", 1, TipoOp.Codice),
+			new OpCode("jcxz", 1, TipoOp.Codice),
+			new OpCode("je", 1, TipoOp.Codice),
+			new OpCode("jg", 1, TipoOp.Codice),
+			new OpCode("jl", 1, TipoOp.Codice),
+			new OpCode("jle", 1, TipoOp.Codice),
+			new OpCode("jge", 1, TipoOp.Codice),
+			new OpCode("jmp", 1, TipoOp.Codice),
+			new OpCode("jne", 1, TipoOp.Codice),
+			new OpCode("jo", 1, TipoOp.Codice),
+			new OpCode("jno", 1, TipoOp.Codice),
+			new OpCode("js", 1, TipoOp.Codice),
+			new OpCode("jns", 1, TipoOp.Codice),
+			new OpCode("ret", 0),
+			new OpCode("nop", 0),
+			new OpCode("stop", 0),
+			new OpCode("shl", 2),
+			new OpCode("shr", 2),
+		};
 
 		public const char FINE = '\0';
-		static string riga;
-		static int indcar;
+		string _riga;
+		int _indcar;
 
-		public static int IndCar { get { return indcar; } }
+		public int IndCar => _indcar;
 
-		static void SaltaSpazi()
+		void SaltaSpazi()
 		{
-			while (SeSpazio(riga[indcar]))
-				indcar++;
+			while (SeSpazio(_riga[_indcar]))
+				_indcar++;
 		}
 
-		static bool SeInNumero(char c)
-		{
-			return "01234567890abcdef".IndexOf(c) != -1 || c == 'h';
-		}
-
-		public static char TestChar()
+		public char TestChar()
 		{
 			SaltaSpazi();
-			return riga[indcar];
+			return _riga[_indcar];
 		}
 
-
-		public static string EstraiToken()
+		public string EstraiToken()
 		{
 			SaltaSpazi();
-			if (SeFine())       // fine riga
+			if (SeFine())
 				return null;
 
-			switch (riga[indcar])
+			switch (_riga[_indcar])
 			{
-				case '\'': indcar++; return "'";
-				case ',': indcar++; return ",";
-				case ':': indcar++; return ":";
-				case '[': indcar++; return "[";
-				case ']': indcar++; return "]";
+				case '\'': _indcar++; return "'";
+				case ',': _indcar++; return ",";
+				case ':': _indcar++; return ":";
+				case '[': _indcar++; return "[";
+				case ']': _indcar++; return "]";
 				case '+':
-				case '-': return riga[indcar++].ToString();
+				case '-': return _riga[_indcar++].ToString();
 
 				default:
-					if (SeInIdentificatore(riga[indcar]))
+					if (SeInIdentificatore(_riga[_indcar]))
 					{
 						int numCar = 1;
-						while (SeInIdentificatore(riga[indcar + numCar]))
+						while (SeInIdentificatore(_riga[_indcar + numCar]))
 							numCar++;
-						string tmp = riga.Substring(indcar, numCar);
-						indcar += numCar;
+						string tmp = _riga.Substring(_indcar, numCar);
+						_indcar += numCar;
 						return tmp;
 					}
 					else
@@ -106,50 +98,47 @@ namespace EasyCpu.Assembler.Parsing
 			}
 		}
 
-		static int LeggiCostanteChar()
+		int LeggiCostanteChar()
 		{
-			indcar++;
-			char c = riga[indcar++];
+			_indcar++;
+			char c = _riga[_indcar++];
 			if (c == FINE)
 				throw new CodiceException(CodiceErrore.Formato);
 			int valore = c;
-			c = riga[indcar++];
+			c = _riga[_indcar++];
 			if (c != '\'')
 				throw new CodiceException(CodiceErrore.Formato);
 			return valore;
-
 		}
 
-
-		public static string LeggiIdentificatore()
+		public string LeggiIdentificatore()
 		{
 			SaltaSpazi();
 			if (SeFine())
 				return null;
-			if (SeInIdentificatore(riga[indcar]))
+			if (SeInIdentificatore(_riga[_indcar]))
 			{
 				int numCar = 1;
-				while (SeInIdentificatore(riga[indcar + numCar]))
+				while (SeInIdentificatore(_riga[_indcar + numCar]))
 					numCar++;
-				string tmp = riga.Substring(indcar, numCar);
-				indcar += numCar;
+				string tmp = _riga.Substring(_indcar, numCar);
+				_indcar += numCar;
 				return tmp;
 			}
 			return null;
 		}
 
-
-		public static string TestToken()
+		public string TestToken()
 		{
-			int tmp = indcar;
+			int tmp = _indcar;
 			string token = EstraiToken();
-			indcar = tmp;
+			_indcar = tmp;
 			return token;
 		}
 
-		static bool SeFine()
+		bool SeFine()
 		{
-			return riga[indcar] == FINE;
+			return _riga[_indcar] == FINE;
 		}
 
 		static bool SeSpazio(char c)
@@ -168,12 +157,7 @@ namespace EasyCpu.Assembler.Parsing
 				s[s.Length - 1] == ':';
 		}
 
-		static bool SeIndirizzoDati(string s)
-		{
-			return s != null && s != "" && s[0] == '@';
-		}
-
-		public static int LeggiValore()
+		public int LeggiValore()
 		{
 			char c = TestChar();
 			if (c == '\'')
@@ -190,8 +174,7 @@ namespace EasyCpu.Assembler.Parsing
 			return StringToInt(segno + tok);
 		}
 
-
-		static int LeggiIndirizzo()
+		int LeggiIndirizzo()
 		{
 			string tok = EstraiToken();
 			try
@@ -204,7 +187,7 @@ namespace EasyCpu.Assembler.Parsing
 			}
 		}
 
-		static List<int> LeggiValori()
+		List<int> LeggiValori()
 		{
 			List<int> valori = new List<int>();
 			valori.Add(LeggiValore());
@@ -219,14 +202,12 @@ namespace EasyCpu.Assembler.Parsing
 			return valori;
 		}
 
-		// ritorna true se il prossimo token corrisponde al simbolo specificato
-
-		public static bool LeggiSimbolo(string sim)
+		public bool LeggiSimbolo(string sim)
 		{
 			return EstraiToken() == sim;
 		}
 
-		public static bool TestSimbolo(string sim)
+		public bool TestSimbolo(string sim)
 		{
 			return TestToken() == sim;
 		}
@@ -268,7 +249,6 @@ namespace EasyCpu.Assembler.Parsing
 			}
 			else
 			{
-
 				try
 				{
 					tmp = segno * Convert.ToInt32(valore);
@@ -296,7 +276,6 @@ namespace EasyCpu.Assembler.Parsing
 				else
 					throw new CodiceException(CodiceErrore.Formato);
 			return ris;
-
 		}
 
 		public static int CercaOpCode(string Nome, out int numOp, out TipoOp tipo)
@@ -313,7 +292,7 @@ namespace EasyCpu.Assembler.Parsing
 			return -1;
 		}
 
-		static void LeggiOperandoIndiretto(out IdOp op, out int offset)
+		void LeggiOperandoIndiretto(out IdOp op, out int offset)
 		{
 			offset = 0;
 			string token = TestToken();
@@ -323,7 +302,7 @@ namespace EasyCpu.Assembler.Parsing
 				case "di": op = IdOp._di; break;
 				case "bx": op = IdOp._bx; break;
 				case "bp": op = IdOp._bp; break;
-				default:                    // è un indirizzo di memoria
+				default:
 					offset = LeggiValore();
 					op = IdOp.Memoria;
 					if (!IntervalloOk(op, offset))
@@ -332,7 +311,6 @@ namespace EasyCpu.Assembler.Parsing
 					if (token != "]")
 						throw new CodiceException(CodiceErrore.AttesaQuadraChiusura);
 					return;
-
 			}
 			EstraiToken();      // scarta registro precedentemente testato
 			token = EstraiToken();
@@ -356,7 +334,7 @@ namespace EasyCpu.Assembler.Parsing
 			return !(op == IdOp.Memoria && (offset < 0 || offset > Ram.MASSIMO_INDIRIZZO));
 		}
 
-		static void LeggiOperando(out IdOp op, out int offset)
+		void LeggiOperando(out IdOp op, out int offset)
 		{
 			offset = 0;
 			op = IdOp.Null;
@@ -378,7 +356,7 @@ namespace EasyCpu.Assembler.Parsing
 					case "di": op = IdOp.di; break;
 					case "bp": op = IdOp.bp; break;
 					case "sp": op = IdOp.sp; break;
-					case "'": goto default;     // è una costante carattere
+					case "'": goto default;     // costante carattere
 					default:
 						op = IdOp.Costante;
 						offset = LeggiValore();
@@ -389,12 +367,11 @@ namespace EasyCpu.Assembler.Parsing
 			EstraiToken();  // scarta registro
 		}
 
-
-		public static List<int> CompilaDati(string s, int indice, out int indirizzo)
+		public List<int> CompilaDati(string s, int indice, out int indirizzo)
 		{
 			indirizzo = 0;
-			riga = s;
-			indcar = 0;
+			_riga = s;
+			_indcar = 0;
 			indirizzo = LeggiIndirizzo();
 			if (EstraiToken() != ":")
 				throw new CodiceException(CodiceErrore.AttesoDuePunti);
@@ -403,43 +380,30 @@ namespace EasyCpu.Assembler.Parsing
 				throw new CodiceException(CodiceErrore.IntervalloIndirizzoDati);
 
 			return LeggiValori();
-
 		}
 
-
-
-		// elimina commenti, trasforma in minuscolo e aggiunge carattere FINE
-		static string AdattaRiga(string riga)
-		{
-			int indCommento = riga.IndexOf("'");
-			if (indCommento == -1) indCommento = riga.Length;
-
-			return riga.ToLower().Substring(0, indCommento) + FINE;
-		}
-
-		public static Instruction Compila(string s, out string etichetta)
+		public Instruction Compila(string s, out string etichetta)
 		{
 			etichetta = null;
 			int numOp = -1;
 			TipoOp tipo;
 			int offset1, offset2;
 			IdOp op1, op2;
-			indcar = 0;
-			riga = s;
+			_indcar = 0;
+			_riga = s;
 			string token = LeggiIdentificatore();
-			if (token != null && riga[indcar] == ':')
+			if (token != null && _riga[_indcar] == ':')
 			{
 				etichetta = token;
 				EstraiToken();          // scarta i duepunti
 				token = EstraiToken();
-				if (token == null)              // c'è solo l'etichetta
-												//return new Istruzione("nop");	// ritorna istruzione NOP
+				if (token == null)      // c'Ã¨ solo l'etichetta
 					return null;
 			}
 			if (token == null || CercaOpCode(token, out numOp, out tipo) == -1)
 				throw new CodiceException(CodiceErrore.AttesoCodiceIstruzione);
 
-			string code = token;            // opcode		
+			string code = token;
 			switch (numOp)
 			{
 				case 0:
@@ -467,13 +431,9 @@ namespace EasyCpu.Assembler.Parsing
 					LeggiOperando(out op2, out offset2);
 					if (TestToken() != null)
 						throw new CodiceException(CodiceErrore.NumeroOperandi);
-
 					return new Instruction(code, op1, op2, offset1, offset2);
 			}
-			throw new Exception("l'istruzione non è stata creata");
+			throw new Exception("l'istruzione non Ã¨ stata creata");
 		}
-
 	}
-
 }
-

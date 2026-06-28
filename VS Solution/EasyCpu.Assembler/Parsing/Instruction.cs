@@ -16,9 +16,7 @@ namespace EasyCpu.Assembler.Parsing
         public int Offset1;
         public int Offset2;
         public string Etichetta;
-        public bool Trap;
-        public int indRiga;     // riga corrispondente nel codice; usato per la 
-                                // gestione degli errori di compilazione
+        public int indRiga;     // riga sorgente 0-based; per gestione errori compilazione
         public Instruction(string code, IdOp op1, IdOp op2, int offset1, int offset2)
         {
             this.Code = code;
