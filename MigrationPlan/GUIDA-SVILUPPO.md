@@ -21,7 +21,7 @@
 
 | Criterio | Comando / controllo |
 |---|---|
-| La soluzione compila | `dotnet build "EasyCPU.vNext.sln" -c Debug` → 0 errori |
+| La soluzione compila | `dotnet build EasyCPU.vNext.slnx -c Debug` → 0 errori |
 | Nessun warning di downgrade pacchetti | nessun `NU1605` (è impostato `warnAsError` su NU1605) |
 | I test del core passano | `dotnet test` (dopo aver creato il progetto di test, Fase 1) |
 | L'app desktop parte | `dotnet run --project EasyCPU.vNext.Desktop` apre la finestra |
@@ -50,7 +50,7 @@
 - Il core (`Cpu`, `Compiler`, `Parser`) è **interamente statico**.
 - Esiste già un meccanismo trap a 1 breakpoint (`Instruction.Trap`, `Cpu.SetTrap`, `inTrap`, `rigaTrap`, `CpuTrapException`): verrà **sostituito** da `HashSet<int> Breakpoints`.
 - `EasyCpu.Win`/`Win.Controls` usano il core staticamente: vengono **rimossi** dalla soluzione.
-- Pacchetti target (tutti reali su nuget.org, giugno 2026): `Avalonia 12.0.5`, `Avalonia.AvaloniaEdit 12.0.0`, `AvaloniaEdit.TextMate 12.0.0`, `Dock.Avalonia` + sotto-pacchetti `12.0.0.2`, `ReactiveUI.Avalonia 12.0.3` (richiede Avalonia ≥ 12.0.4 → ok con 12.0.5).
+- Pacchetti target (tutti reali su nuget.org, giugno 2026): `Avalonia 12.0.5`, `Avalonia.AvaloniaEdit 12.0.0`, `AvaloniaEdit.TextMate 12.0.0`, `Dock.Avalonia` + sotto-pacchetti `12.0.0.2` (con `Dock.Model.Mvvm`), `CommunityToolkit.Mvvm 8.4.0`. **Non si usa ReactiveUI.**
 
 ---
 
@@ -74,13 +74,13 @@
 
 3. `Directory.Build.props`: `<AvaloniaVersion>12.0.5</AvaloniaVersion>`.
 
-4. Allineare **tutti** i `.csproj` ad Avalonia 12.0.5 e ReactiveUI.Avalonia 12.0.3:
-   - `EasyCPU.vNext`: `Avalonia`, `Avalonia.Themes.Fluent`, `Avalonia.Diagnostics` → 12.0.5; togliere i `ProjectReference` ad AvaloniaEdit; aggiungere `Avalonia.AvaloniaEdit 12.0.0`, `AvaloniaEdit.TextMate 12.0.0`, e i pacchetti Dock 12.0.0.2 (`Dock.Avalonia`, `Dock.Model.ReactiveUI`, `Dock.Serializer.SystemTextJson`, `Dock.Avalonia.Themes.Fluent`).
-   - `.Desktop`: `Avalonia`, `Avalonia.Desktop`, `Avalonia.Diagnostics`, `Avalonia.Fonts.Inter` → 12.0.5; **rimuovere il `ProjectReference` duplicato** a `EasyCPU.vNext` (compare due volte).
+4. Allineare **tutti** i `.csproj` ad Avalonia 12.0.5 e CommunityToolkit.Mvvm 8.4.0:
+   - `EasyCPU.vNext`: `Avalonia`, `Avalonia.Themes.Fluent` → 12.0.5; togliere i `ProjectReference` ad AvaloniaEdit; aggiungere `Avalonia.AvaloniaEdit 12.0.0`, `AvaloniaEdit.TextMate 12.0.0`, `CommunityToolkit.Mvvm 8.4.0`, e i pacchetti Dock 12.0.0.2 (`Dock.Avalonia`, `Dock.Model.Mvvm`, `Dock.Serializer.SystemTextJson`, `Dock.Avalonia.Themes.Fluent`).
+   - `.Desktop`: `Avalonia`, `Avalonia.Desktop`, `Avalonia.Fonts.Inter` → 12.0.5; **rimuovere il `ProjectReference` duplicato** a `EasyCPU.vNext` (compare due volte).
    - `.Browser`: `Avalonia.Browser`, `Avalonia.Fonts.Inter` → 12.0.5.
    - `.Android`: `Avalonia.Android`, `Avalonia.Fonts.Inter` → 12.0.5.
    - `.iOS`: `Avalonia.iOS`, `Avalonia.Fonts.Inter` → 12.0.5.
-   - Ovunque: `ReactiveUI.Avalonia` → 12.0.3.
+   - Rimuovere `ReactiveUI.Avalonia` da tutti i `.csproj` (sostituito da CommunityToolkit.Mvvm; non serve nei head perché non è un requisito Avalonia).
 
 5. In `App.xaml`, aggiornare lo `StyleInclude` del tema AvaloniaEdit: oggi punta al progetto sorgente `avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml`. Con il NuGet l'assembly resta `AvaloniaEdit`, quindi l'URI **dovrebbe** restare valido: verificarlo all'avvio (vedi Problemi).
 
@@ -90,7 +90,7 @@
 
 ### Verifica
 
-- `dotnet build "EasyCPU.vNext.sln" -c Debug` → 0 errori, **0 NU1605**.
+- `dotnet build EasyCPU.vNext.slnx -c Debug` → 0 errori, **0 NU1605**.
 - `dotnet run --project EasyCPU.vNext.Desktop` → finestra vuota/scheletro che si apre senza crash.
 - `git status` mostra rimossi solo i progetti previsti; `.sln` non contiene più i GUID dei progetti eliminati.
 
@@ -204,7 +204,7 @@
 
 - `DockFactory : Factory` che costruisce il layout iniziale (vedi `README.md` §8).
 - ViewModel per pannello: `CodeEditorViewModel`, `DataEditorViewModel`, `RegistersViewModel`, `MemoryViewModel`, `StackViewModel`, `ErrorsViewModel`.
-- `MainViewModel` con `ReactiveCommand` per i comandi IDE/debug; possiede l'istanza `Cpu` + `Compiler`.
+- `MainViewModel` con `[RelayCommand]` (CommunityToolkit) per i comandi IDE/debug; possiede l'istanza `Cpu` + `Compiler`.
 - Creare qui il **`SettingsViewModel` singleton** (sorgente osservabile delle opzioni, vedi Fase 6) e iniettarlo in `MainViewModel`/pannelli: serve già da Fase 5 per la formattazione dei dump.
 - Registrare i `DataTemplate` View↔ViewModel (`ViewLocator` o `DataTemplates` in `App.xaml`).
 - Serializzazione layout con `Dock.Serializer.SystemTextJson`.
@@ -214,12 +214,85 @@
 - L'app mostra i pannelli (anche vuoti) nel layout previsto; i pannelli si possono trascinare/agganciare.
 - Spostando un pannello, chiudendo e riaprendo l'app, il layout si ripristina (persistenza, vedi Fase 7 — qui basta che il serializer non lanci).
 
+### Dock 12: architettura con CommunityToolkit.Mvvm
+
+Il progetto usa **`Dock.Model.Mvvm`** — il sotto-package che basa tutte le classi Dock su `ObservableObject` di CommunityToolkit, coerente con la scelta di non usare ReactiveUI.
+
+> Nota: esiste anche `Dock.Model.ReactiveUI` (basa le classi su `ReactiveObject`). Sono alternative mutualmente esclusive: mescolarle genera conflitti di tipo `IFactory` a runtime, non a compile-time. Non aggiungere mai `Dock.Model.ReactiveUI`.
+
+**Regola operativa:** ogni `using` Dock viene da `Dock.Model.Mvvm.Controls` o `Dock.Model.Core` (interfacce pure). Zero eccezioni.
+
+#### Tipo Dock per ogni pannello
+
+I ViewModel pannello **ereditano** da `Tool` o `Document` (da `Dock.Model.Mvvm.Controls`) — sono gli item Dock, non li contengono. La classe deve essere `partial` per i source generator di CommunityToolkit.
+
+| ViewModel | Tipo Dock | Motivo |
+|---|---|---|
+| `CodeEditorViewModel` | `Document` | area editing principale; supporta tab multipli |
+| `DataEditorViewModel` | `Document` | idem per sezione `.DATA` |
+| `RegistersViewModel` | `Tool` | pannello ausiliario, agganciabile ai lati |
+| `MemoryViewModel` | `Tool` | idem |
+| `StackViewModel` | `Tool` | idem |
+| `ErrorsViewModel` | `Tool` | idem (come "Output" in VS) |
+
+`MainViewModel : ObservableObject` — coordina, non è un item Dock.
+
+`DockFactory` eredita da `Factory` di `Dock.Model.Mvvm`:
+
+```csharp
+using Dock.Model.Core;
+using Dock.Model.Mvvm.Controls;
+
+public class DockFactory : Factory
+{
+    public override IRootDock CreateLayout()
+    {
+        var codeEditor = new CodeEditorViewModel { Id = "CodeEditor", Title = "Codice" };
+        var documentDock = new DocumentDock
+        {
+            ActiveDockable = codeEditor,
+            VisibleDockables = CreateList<IDockable>(codeEditor, dataEditor)
+        };
+        // ...
+    }
+}
+```
+
+Panel VM con CommunityToolkit — classe `partial`, proprietà con `[ObservableProperty]`:
+
+```csharp
+public partial class RegistersViewModel : Tool
+{
+    [ObservableProperty]
+    private string _dump = "";
+}
+```
+
+`MainViewModel` usa `[RelayCommand]` al posto di `ReactiveCommand`:
+
+```csharp
+public partial class MainViewModel : ObservableObject
+{
+    [RelayCommand] private void StepInto() { /* ... */ }
+    [RelayCommand] private void Run() { /* ... */ }
+}
+```
+
+#### Confine serializzazione (obbligatorio per la persistenza di Fase 7)
+
+`Dock.Serializer.SystemTextJson` serializza i `Tool`/`Document` come parte del layout. Questo impone un confine netto:
+
+- **Nei ViewModel pannello (`Tool`/`Document`) NON mettere**: riferimenti a `Cpu`, liste di `CompilerError`, qualsiasi stato runtime.
+- **Mettere solo**: proprietà che descrivono l'aspetto (titolo, visibilità, dimensioni) e comandi che delegano a `MainViewModel`.
+
+Lo stato vivo (dump registri/memoria/stack, errori) vive in `MainViewModel`; i pannelli lo raggiungono via binding/subscribe. Senza questo confine il deserializer crasha al riavvio su riferimenti non serializzabili.
+
 ### Problemi probabili
 
-- **Dock 12 + ReactiveUI**: usare `Dock.Model.ReactiveUI` (coerente con `ReactiveUI.Avalonia`). Mescolare `Dock.Model.Mvvm` e `Dock.Model.ReactiveUI` genera conflitti di tipo `IFactory`.
+- **Dock 12 + ReactiveUI**: vedi sezione dedicata sopra. Il setup attuale è già corretto.
 - **Tema Dock mancante**: includere `Dock.Avalonia.Themes.Fluent` in `App.xaml`, altrimenti i separatori/tab sono invisibili.
 - **ViewLocator non trova le View**: i pannelli appaiono come testo "Not Found". Verificare convenzione di naming `XxxViewModel`→`XxxView` e namespace.
-- **Serializzazione**: i ViewModel devono essere (de)serializzabili dal `SystemTextJson` serializer; tipi senza costruttore senza parametri o con riferimenti ciclici falliscono. Tenere i ViewModel di Dock semplici e separati dallo stato runtime della CPU.
+- **Serializzazione**: costruttori senza parametri obbligatori per tutti i `Tool`/`Document`; niente riferimenti ciclici nelle proprietà serializzate. Lo stato runtime della CPU non va nei pannelli Dock (vedi confine serializzazione sopra).
 
 ---
 
@@ -314,11 +387,11 @@
 
 **`SettingsViewModel` — sorgente osservabile unica delle opzioni (singleton).**
 
-1. `SettingsViewModel : ReactiveObject` con una proprietà osservabile per ogni opzione configurabile (vedi Appendice B): `FormatoDati`, `FormatoCarZero`, `MaxNumErrori`, `ColonneStack`, `InizializzaRegistri`, `LoopInfinito`, `MargineSinistro`, `MostraMemoria`, font/zoom, `PienoSchermo`.
+1. `SettingsViewModel : ObservableObject` (classe `partial`, CommunityToolkit) con una proprietà `[ObservableProperty]` per ogni opzione configurabile (vedi Appendice B): `FormatoDati`, `FormatoCarZero`, `MaxNumErrori`, `ColonneStack`, `InizializzaRegistri`, `LoopInfinito`, `MargineSinistro`, `MostraMemoria`, font/zoom, `PienoSchermo`.
 2. È un **singleton** creato all'avvio (Fase 2, composizione dell'app) e iniettato in `MainViewModel` e nei pannelli che ne dipendono. Tutta la UI fa binding su questo VM, **non** su `Ambiente`.
 3. **Caricamento**: all'avvio `Storage.LeggiOpzioni()` popola `Ambiente`, poi `SettingsViewModel` si inizializza da `Ambiente.*`.
-4. **Write-through verso il core**: ogni setter, oltre a `RaiseAndSetIfChanged`, aggiorna il corrispondente campo `Ambiente.*` (così il core, che legge `Ambiente` staticamente, resta coerente). In particolare `FormatoDati` deve propagare a `Ambiente.FormatoDati` (che ricalcola `FI/FD/FR`).
-5. **Reattività dei pannelli**: i pannelli che mostrano dati formattati (registri/memoria/stack) si sottoscrivono ai cambi rilevanti (es. `WhenAnyValue(s => s.FormatoDati, s => s.ColonneStack)`) e richiamano `RefreshDebugViews()`.
+4. **Write-through verso il core**: ogni proprietà implementa il write-through nella callback parziale generata da CommunityToolkit (`partial void OnFormatoDatiChanged(FormatoValore value) => Ambiente.FormatoDati = value;`), così il core, che legge `Ambiente` staticamente, resta coerente. In particolare `FormatoDati` deve propagare a `Ambiente.FormatoDati` (che ricalcola `FI/FD/FR`).
+5. **Reattività dei pannelli**: i pannelli che mostrano dati formattati (registri/memoria/stack) si sottoscrivono ai cambi rilevanti via `PropertyChanged` (es. `settings.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(FormatoDati) or nameof(ColonneStack)) RefreshDebugViews(); };`) oppure `MainViewModel` chiama direttamente `RefreshDebugViews()` a ogni step/run.
 6. **Persistenza**: `SettingsViewModel.Salva()` → `Storage.SalvaOpzioni()`.
 
 **`OpzioniWindow` — editing con pattern OK/Annulla.**

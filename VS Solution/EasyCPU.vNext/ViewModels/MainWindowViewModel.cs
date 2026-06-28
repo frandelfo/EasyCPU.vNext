@@ -1,5 +1,5 @@
-using ReactiveUI;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace EasyCPU.vNext.ViewModels;
 
-public class MainWindowViewModel : ReactiveObject { }
+public partial class MainWindowViewModel : ObservableObject { }

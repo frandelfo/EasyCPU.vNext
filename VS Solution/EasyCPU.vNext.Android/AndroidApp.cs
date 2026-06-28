@@ -4,7 +4,6 @@ using Android.Runtime;
 using Avalonia;
 using Avalonia.Android;
 using EasyCPU.vNext;
-using ReactiveUI.Avalonia;
 
 namespace EasyCPU.vNext.Android;
 
@@ -17,7 +16,6 @@ public class AndroidApp : AvaloniaAndroidApplication<App>
     protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
     {
         return base.CustomizeAppBuilder(builder)
-            .WithInterFont()
-            .UseReactiveUI(_ => { });
+            .WithInterFont();
     }
 }

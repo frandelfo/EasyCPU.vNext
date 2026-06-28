@@ -32,7 +32,7 @@ Regole aggiuntive specifiche di questo progetto:
 
 ## 2. Mappa del progetto
 
-Radice soluzione: `VS Solution/` (contiene `EasyCPU.vNext.sln`).
+Radice soluzione: `VS Solution/` (contiene `EasyCPU.vNext.slnx`).
 
 ```
 VS Solution/
@@ -57,7 +57,7 @@ VS Solution/
 Queste sono già verificate sul sorgente. Non re-inferirle: usale.
 
 - **TFM**: tutti `net10.0` (head con suffisso piattaforma). SDK pin: `global.json` → 10.0.101.
-- **Versioni target**: Avalonia `12.0.5`, AvaloniaEdit `12.0.0` (pacchetto `Avalonia.AvaloniaEdit`), TextMate `AvaloniaEdit.TextMate 12.0.0`, Dock `12.0.0.2`, `ReactiveUI.Avalonia 12.0.3` (richiede Avalonia ≥ 12.0.4). Allinea TUTTO a 12.0.5 per evitare NU1605.
+- **Versioni target**: Avalonia `12.0.5`, AvaloniaEdit `12.0.0` (pacchetto `Avalonia.AvaloniaEdit`), TextMate `AvaloniaEdit.TextMate 12.0.0`, Dock `12.0.0.2` (con `Dock.Model.Mvvm`), `CommunityToolkit.Mvvm 8.4.0`. **Non si usa ReactiveUI.** Allinea TUTTO a 12.0.5 per evitare NU1605.
 - **Stack discendente**: SP iniziale = 256 (`Ram.MASSIMO_INDIRIZZO+1`); `push` → `sp--`, `pop` → `sp++`; `call` push, `ret` pop.
 - **Fetch/Execute**: `ip++` avviene a fine `Execute()`. Dopo uno step, `curIstruzione` è l'istruzione **già eseguita**; quella da eseguire è `code[ip]`.
 - **Righe**: il compilatore usa indici **0-based** (`indRiga`); AvaloniaEdit usa righe **1-based**. Converti sempre, una sola volta, in un punto noto.
@@ -76,8 +76,8 @@ Comandi (esegui dalla cartella `VS Solution/`):
 
 ```bash
 dotnet --version                                   # atteso: 10.0.101.x
-dotnet restore "EasyCPU.vNext.sln"
-dotnet build "EasyCPU.vNext.sln" -c Debug          # 0 errori, 0 NU1605
+dotnet restore EasyCPU.vNext.slnx
+dotnet build EasyCPU.vNext.slnx -c Debug            # 0 errori, 0 NU1605
 dotnet test                                        # dalla Fase 1 in poi
 dotnet run --project EasyCPU.vNext.Desktop         # verifica avvio app (manuale)
 ```
@@ -116,9 +116,9 @@ I dettagli completi (passi puntuali, problemi noti) sono in `GUIDA-SVILUPPO.md`:
 
 ### Fase 2 — Dock + ViewModel
 - **Tocca**: `EasyCPU.vNext/` (DockFactory, ViewModel dei pannelli, MainViewModel, registrazione DataTemplate, serializer layout).
-- **DoD**: shell con pannelli dockabili (anche vuoti) basata su `Dock.Model.ReactiveUI`; il serializer layout non lancia.
+- **DoD**: shell con pannelli dockabili (anche vuoti) basata su `Dock.Model.Mvvm`; il serializer layout non lancia.
 - **Gate**: app avvia, pannelli agganciabili/spostabili.
-- **Attenzione**: non mischiare `Dock.Model.Mvvm` e `Dock.Model.ReactiveUI`; includi `Dock.Avalonia.Themes.Fluent`.
+- **Attenzione**: non aggiungere `Dock.Model.ReactiveUI` o `ReactiveUI.Avalonia`; includi `Dock.Avalonia.Themes.Fluent`; classi VM `partial` per i source generator CommunityToolkit.
 
 ### Fase 3 — Editor con debug
 - **Tocca**: `EasyCPU.vNext/` (BreakpointMargin, DebugCurrentLineRenderer, CodeEditorView, logica EasyEditor su AvaloniaEdit).
