@@ -220,7 +220,12 @@ Il progetto usa **`Dock.Model.Mvvm`** — il sotto-package che basa tutte le cla
 
 > Nota: esiste anche `Dock.Model.ReactiveUI` (basa le classi su `ReactiveObject`). Sono alternative mutualmente esclusive: mescolarle genera conflitti di tipo `IFactory` a runtime, non a compile-time. Non aggiungere mai `Dock.Model.ReactiveUI`.
 
-**Regola operativa:** ogni `using` Dock viene da `Dock.Model.Mvvm.Controls` o `Dock.Model.Core` (interfacce pure). Zero eccezioni.
+**Regola operativa (corretta dopo verifica sorgenti):**
+- Tipi strutturali Dock (Document, Tool, RootDock, ProportionalDock, DocumentDock, ToolDock, ProportionalDockSplitter) → `using Dock.Model.Mvvm.Controls;`
+- `Factory` (classe base DockFactory) → `using Dock.Model.Mvvm;`
+- **`IRootDock`** → `using Dock.Model.Controls;` (**NON** `Dock.Model.Core` — errore frequente)
+- `IDockable`, `IFactory` → `using Dock.Model.Core;`
+- `Orientation` per ProportionalDock → `using Dock.Model.Core;` (enum `Orientation.Horizontal/Vertical`)
 
 #### Tipo Dock per ogni pannello
 
@@ -240,8 +245,10 @@ I ViewModel pannello **ereditano** da `Tool` o `Document` (da `Dock.Model.Mvvm.C
 `DockFactory` eredita da `Factory` di `Dock.Model.Mvvm`:
 
 ```csharp
-using Dock.Model.Core;
-using Dock.Model.Mvvm.Controls;
+using Dock.Model.Controls;   // IRootDock
+using Dock.Model.Core;       // IDockable, Orientation
+using Dock.Model.Mvvm;       // Factory
+using Dock.Model.Mvvm.Controls; // DocumentDock, ToolDock, ProportionalDock, ecc.
 
 public class DockFactory : Factory
 {
@@ -250,10 +257,13 @@ public class DockFactory : Factory
         var codeEditor = new CodeEditorViewModel { Id = "CodeEditor", Title = "Codice" };
         var documentDock = new DocumentDock
         {
+            CanCreateDocument = false,
+            Proportion = 0.65,
             ActiveDockable = codeEditor,
             VisibleDockables = CreateList<IDockable>(codeEditor, dataEditor)
         };
-        // ...
+        // Root: CreateRootDock() factory method; layout: new ProportionalDock(Orientation.Horizontal)
+        // Splitter tra dockables: new ProportionalDockSplitter()
     }
 }
 ```
@@ -286,6 +296,20 @@ public partial class MainViewModel : ObservableObject
 - **Mettere solo**: proprietà che descrivono l'aspetto (titolo, visibilità, dimensioni) e comandi che delegano a `MainViewModel`.
 
 Lo stato vivo (dump registri/memoria/stack, errori) vive in `MainViewModel`; i pannelli lo raggiungono via binding/subscribe. Senza questo confine il deserializer crasha al riavvio su riferimenti non serializzabili.
+
+### Assunzioni e decisioni (registrate durante l'esecuzione — 2026-06-28)
+
+1. **`IRootDock` è in `Dock.Model.Controls`** — stessa dll di `Dock.Model.Mvvm` via dipendenza transitiva `Dock.Model`. `Dock.Model.Core` contiene solo interfacce di base (`IDockable`, `IFactory`, `Orientation`). Il codice guida sopra aveva il namespace sbagliato.
+
+2. **Tema Dock via classe XAML** — `<dockTheme:DockFluentTheme />` con `xmlns:dockTheme="clr-namespace:Dock.Avalonia.Themes.Fluent;assembly=Dock.Avalonia.Themes.Fluent"`. La classe è `Dock.Avalonia.Themes.Fluent.DockFluentTheme`, risorsa interna `/DockFluentTheme.axaml`.
+
+3. **`DockControl` richiede sia `Layout` che `Factory` bindati** — senza `Factory` le operazioni di drag/drop non funzionano. Esporre `DockFactory` come proprietà `IFactory` su `MainViewModel`.
+
+4. **ViewLocator `Match`** — limitato a `Tool or Document` (non tutta `ObservableObject`) per evitare che Dock tenti di risolvere le viste per i propri tipi interni.
+
+5. **`SettingsViewModel` write-through rimandato** — per Fase 2, il singleton inizializza solo le proprietà da `Ambiente.*`. I callback `partial void OnXxxChanged` sono Fase 6.
+
+6. **`#nullable enable`** — aggiunto nei file che usano annotazioni nullable (`?`) senza abilitarle nel csproj globale (per non toccare i warning del codice core pre-esistente).
 
 ### Problemi probabili
 

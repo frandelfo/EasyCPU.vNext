@@ -1,5 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="EasyCPU.vNext.Views.MainView">
-    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Text="EasyCPU.vNext" />
+             xmlns:controls="clr-namespace:Dock.Avalonia.Controls;assembly=Dock.Avalonia"
+             xmlns:vm="clr-namespace:EasyCPU.vNext.ViewModels"
+             x:Class="EasyCPU.vNext.Views.MainView"
+             x:DataType="vm:MainViewModel">
+    <controls:DockControl Layout="{Binding Layout}" Factory="{Binding DockFactory}" />
 </UserControl>

@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EasyCPU.vNext.ViewModels"
+             x:Class="EasyCPU.vNext.Views.StackView"
+             x:DataType="vm:StackViewModel">
+    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Text="Stack" />
+</UserControl>

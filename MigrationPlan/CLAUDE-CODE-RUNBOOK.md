@@ -114,11 +114,19 @@ I dettagli completi (passi puntuali, problemi noti) sono in `GUIDA-SVILUPPO.md`:
   3. Marker commento `//` confermato in `PreparaRiga`; `'` serve solo per costanti char.
   4. Indici core 0-based; conversione a 1-based (AvaloniaEdit) va fatta solo nella UI in Fase 3.
 
-### Fase 2 — Dock + ViewModel
+### Fase 2 — Dock + ViewModel ✅ COMPLETATA (2026-06-28)
 - **Tocca**: `EasyCPU.vNext/` (DockFactory, ViewModel dei pannelli, MainViewModel, registrazione DataTemplate, serializer layout).
 - **DoD**: shell con pannelli dockabili (anche vuoti) basata su `Dock.Model.Mvvm`; il serializer layout non lancia.
 - **Gate**: app avvia, pannelli agganciabili/spostabili.
 - **Attenzione**: non aggiungere `Dock.Model.ReactiveUI` o `ReactiveUI.Avalonia`; includi `Dock.Avalonia.Themes.Fluent`; classi VM `partial` per i source generator CommunityToolkit.
+- **Assunzioni registrate** (dettagli in `GUIDA-SVILUPPO.md` §Fase 2 → "Assunzioni e decisioni"):
+  1. `IRootDock` è in `Dock.Model.Controls`, non `Dock.Model.Core` (che contiene solo `IDockable`/`IFactory`). Aggiungere `using Dock.Model.Controls;` in tutti i file che usano `IRootDock`.
+  2. Il tema Dock si include via classe XAML: `<dockTheme:DockFluentTheme />` (`Dock.Avalonia.Themes.Fluent.DockFluentTheme`), non via `StyleInclude`.
+  3. `DockControl` in `Dock.Avalonia.Controls`, assembly `Dock.Avalonia`. Richiede sia `Layout` che `Factory` bindati (senza `Factory`, il drag/drop non funziona).
+  4. `Factory.CreateLayout()` è virtuale — override obbligatorio. Le factory methods (`CreateRootDock`, `CreateProportionalDock`, ecc.) vanno richiamate sull'istanza per creare i tipi Mvvm corretti.
+  5. `SettingsViewModel`: singleton con costruttore privato, inizializzato da `Ambiente.*` dopo `Ambiente.Inizializza()` in `App.OnFrameworkInitializationCompleted`. Il write-through verso `Ambiente` (callback `partial void OnXxxChanged`) è rimandato a Fase 6.
+  6. `MainWindowViewModel.cs` è stato riusato (classe rinominata a `MainViewModel`); il file non è stato spostato.
+  7. Aggiunta `#nullable enable` nei file che usano annotazioni nullable (`?`) per evitare CS8632.
 
 ### Fase 3 — Editor con debug
 - **Tocca**: `EasyCPU.vNext/` (BreakpointMargin, DebugCurrentLineRenderer, CodeEditorView, logica EasyEditor su AvaloniaEdit).
