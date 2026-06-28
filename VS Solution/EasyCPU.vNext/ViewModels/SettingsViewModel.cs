@@ -7,6 +7,7 @@ public partial class SettingsViewModel : ObservableObject
 {
     public static SettingsViewModel Instance { get; } = new();
 
+    [ObservableProperty] private AppTheme _theme = AppTheme.Light;
     [ObservableProperty] private FormatoValore _formatoDati;
     [ObservableProperty] private string _formatoCarZero = "";
     [ObservableProperty] private int _maxNumErrori;
@@ -29,4 +30,6 @@ public partial class SettingsViewModel : ObservableObject
         _mostraMemoria = Ambiente.MostraMemoria;
         _pienoSchermo = Ambiente.PienoSchermo;
     }
+
+    partial void OnThemeChanged(AppTheme value) => App.ApplyTheme(value);
 }

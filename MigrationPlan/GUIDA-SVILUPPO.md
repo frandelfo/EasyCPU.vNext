@@ -320,6 +320,84 @@ Lo stato vivo (dump registri/memoria/stack, errori) vive in `MainViewModel`; i p
 
 ---
 
+## FASE 2b — Menu IDE, Toolbar e Temi
+
+**Obiettivo:** chrome completo della finestra desktop (menu + toolbar + temi), toolbar touch per mobile/browser. Tutte le voci sono cablate a comandi già presenti o stub che saranno completati nelle fasi successive.
+
+### Passi
+
+1. **`AppTheme.cs` — enum + variante Blue**
+   - Nuovo file `AppTheme.cs` in `EasyCPU.vNext/`: `enum AppTheme { Light, Dark, Blue }`.
+   - Stessa classe: `static class AppThemeVariants` con `public static readonly ThemeVariant Blue = new ThemeVariant("Blue", ThemeVariant.Dark)`.
+   - In `App.axaml`, aggiungere `ResourceDictionary.ThemeDictionaries`: chiave `{x:Static local:AppThemeVariants.Blue}` sovrascrive `SystemAccentColor` con `#007ACC` (VS Code blue), più `Dark1`/`Dark2`/`Light1` attorno.
+
+2. **`SettingsViewModel` — aggiungere `Theme`**
+   - `[ObservableProperty] private AppTheme _theme = AppTheme.Light;`
+   - Callback: `partial void OnThemeChanged(AppTheme value) => App.ApplyTheme(value);`
+   - `App.ApplyTheme(AppTheme)` (metodo `static`) → `Application.Current!.RequestedThemeVariant = ...`
+
+3. **`MainViewModel` — nuovi comandi stub**
+   - File: `New`, `Open`, `Save`, `SaveAs`, `Exit`
+   - Modifica: `Undo`, `Redo`, `Cut`, `Copy`, `Paste`, `SelectAll`, `Find` — tutti `{ }`, collegati all'editor in Fase 3
+   - Esegui: aggiungere `RunUntil`, `Stop`, `ToggleBreakpoint` — stub
+   - Strumenti: `ShowOptions` — stub (Fase 6)
+   - Tema: `[RelayCommand] private void SetTheme(AppTheme t) => Settings.Theme = t;`
+
+4. **Finestre — visibilità pannelli**
+   - `DockFactory`: aggiungere proprietà per i sei ViewModel pannello (`CodeEditor`, `DataEditor`, `Registers`, `Stack`, `Memory`, `Errors`) e valorizzarle durante `CreateLayout()`.
+   - `MainViewModel`: sei proprietà bool `Is*Visible` che leggono/scrivono `IDockable.IsVisible`; sei `[RelayCommand] private void Toggle*()` che le invertono.
+
+5. **`MainWindow.xaml` — menu in-window + NativeMenu + toolbar**
+   - Avvolgere il `DockControl` in un `DockPanel`; aggiungere `<Menu DockPanel.Dock="Top">` con le cinque voci.
+   - Aggiungere `<NativeMenu.Menu>` con la stessa struttura (barra di sistema macOS).
+   - Aggiungere `<ToolBar DockPanel.Dock="Top">` (sotto il Menu): bottoni testo `Nuovo / Apri / Salva | Compila / Avvia / Ferma / Step Into / Step Over / Step Out | Chiaro / Scuro / Blue`.
+
+6. **`MainView.axaml` — toolbar touch (mobile/browser, stile Rider)**
+   - Aggiungere un `Border` con `StackPanel` orizzontale in cima: `[File ▼] [Compila] [Avvia] [Ferma] [→ Into] [→→ Over] [↑ Out]`
+   - Bottoni: `MinWidth="60" Padding="8,4"` per target touch ≥ 48 dp.
+   - `[File ▼]` → `OpenCommand` (stub; in Fase 6 si sostituisce con ActionSheet).
+
+### Struttura menu completa (da replicare in Menu in-window e NativeMenu)
+
+| Menu | Voci |
+|---|---|
+| **File** | Nuovo `Ctrl+N` / Apri... `Ctrl+O` / Salva `Ctrl+S` / Salva come... `Ctrl+Shift+S` / ─ / Recenti ▶ *(stub)* / ─ / Stampa `Ctrl+P` / ─ / Esci `Alt+F4` |
+| **Modifica** | Annulla `Ctrl+Z` / Ripristina `Ctrl+Y` / ─ / Taglia `Ctrl+X` / Copia `Ctrl+C` / Incolla `Ctrl+V` / ─ / Seleziona tutto `Ctrl+A` / ─ / Trova... `Ctrl+F` |
+| **Esegui** | Compila `Ctrl+B` / ─ / Avvia `F5` / Avvia fino a... `Ctrl+F5` / ─ / Esegui istruzione `F11` / Passo `F10` / Passo uscita `Shift+F11` / ─ / Ferma `F8` / ─ / Imposta/Rimuovi breakpoint `F9` |
+| **Finestre** | ✓ Editor codice / ✓ Editor dati / ✓ Registri / ✓ Stack / ✓ Memoria / ✓ Errori / ─ / Ripristina layout |
+| **Strumenti** | Opzioni... *(stub → Fase 6)* / ─ / Tema ▶ Chiaro / Scuro / Blue (VS Code) |
+
+### Verifica
+
+- `dotnet build` 0 errori.
+- App desktop: menu in-window visibile; su macOS visibile anche nella barra di sistema.
+- Cambio tema (Chiaro/Scuro/Blue) aggiorna visivamente l'app senza riavvio.
+- Voci Finestre: il checkmark riflette la visibilità del pannello; click lo toglie/aggiunge.
+- App mobile/browser: compare la touch bar, non il menu classico.
+- Tutti i comandi stub cliccabili senza crash.
+
+### Problemi probabili
+
+- **`NativeMenu` binding vuoto su macOS**: i `NativeMenuItem` usano il `DataContext` della finestra (MainViewModel). Se le voci appaiono grigie o non reagiscono, verificare che `DataContext` sia già settato prima di `InitializeComponent()`.
+- **`MenuItem.IsChecked` non si aggiorna al click**: in Avalonia il click esegue il Command ma non togla automaticamente `IsChecked`. Usare `IsChecked="{Binding IsCodeEditorVisible, Mode=OneWay}"` e il Command separato per invertire il bool.
+- **`IDockable.IsVisible` non nasconde il pannello**: se il tab rimane visibile, `DockableBase.IsVisible` potrebbe richiedere una notifica esplicita al DockControl; come fallback usare `Factory.RemoveDockable`/`AddDockable`. Annotare l'assunzione nel report.
+- **`ThemeVariant Blue` non applicato**: se l'accento non cambia, verificare che la chiave del `ThemeDictionary` sia `{x:Static local:AppThemeVariants.Blue}` (non una stringa) e che `RequestedThemeVariant` sia impostato dopo che il framework è inizializzato.
+- **Target touch troppo piccoli su Android**: usare `MinHeight="48"` sul StackPanel della touch toolbar.
+
+### Assunzioni e decisioni (registrate durante l'esecuzione — 2026-06-28)
+
+1. **`NativeMenuItem` non supporta compiled bindings per `ToggleType`/`IsChecked`**: il precompiler XAML (AVLN3000) rifiuta `ToggleType="CheckMark"` + `IsChecked="{Binding ...}"` su `NativeMenuItem`. Soluzione: `NativeMenu` contiene solo `Header`, `Command`, `Gesture`; i checkmark (`ToggleType="CheckBox"/"Radio"` + `IsChecked` OneWay) vivono solo nell'`<Menu>` in-window di Avalonia.
+
+2. **Blue theme interamente in C# — niente `ThemeDictionaries` XAML**: usare `{x:Static}` come `x:Key` in `Application.Resources.ThemeDictionaries` causa un crash silenzioso del precompiler XAML (`XamlLoadException: No precompiled XAML found` a runtime, ma 0 errori a build). Soluzione adottata: `ApplyTheme(AppTheme.Blue)` in `App.xaml.cs` imposta `RequestedThemeVariant = Dark` e inietta i cinque `SystemAccentColor*` direttamente in `Application.Current.Resources` a runtime.
+
+3. **`IDockable.IsVisible` non esiste in Dock 12**: la proprietà non è definita in `IDockable`/`DockableBase` nella versione 12.0.0.2. La visibilità si gestisce con `IFactory.HideDockable(IDockable)` / `IFactory.RestoreDockable(IDockable)` e si controlla via `IDockable.DockingState == DockingWindowState.Hidden`.
+
+4. **Avalonia 12 non ha `<ToolBar>`**: il tipo `ToolBar` non esiste nel namespace `https://github.com/avaloniaui` (AVLN2000 a build). La toolbar è stata implementata come `<Border>` + `<StackPanel Orientation="Horizontal">`, identico al pattern già usato per la touch toolbar in `MainView.axaml`.
+
+5. **File `.xaml` vanno dichiarati `<AvaloniaXaml>` nel csproj**: `<AvaloniaResource Include="**\*.xaml"/>` embeds i file come risorse grezze senza precompilazione. Sostituito con `<AvaloniaXaml Include="**\*.xaml"/>` per permettere al precompiler di generare il bytecode. I file `.axaml` sono auto-inclusi dall'Avalonia SDK.
+
+---
+
 ## FASE 3 — Editor con debug integrato
 
 **Obiettivo:** editor AvaloniaEdit con margine breakpoint cliccabile ed evidenziazione riga corrente.
@@ -634,12 +712,13 @@ Flag: `ZF`(1) `SF`(2) `OF`(4).
 ## Sequenza riassuntiva
 
 ```
-Fase 0  Pulizia + Avalonia 12 + svuota demo   → build verde
-Fase 1  Core a istanze + breakpoint + path fix → dotnet test verde
-Fase 2  Dock + ViewModel                        → shell dockabile
-Fase 3  Editor + margine + renderer debug       → breakpoint cliccabili, riga evidenziata
-Fase 4  Syntax highlighting (.xshd)             → 35 opcode colorati
-Fase 5  Pannelli (reg/mem/stack/errori)         → reattivi a ogni step
-Fase 6  Dialog + IStorageProvider               → opzioni/loop/apri-salva
-Fase 7  Persistenza (layout/recenti/bkpt)       → tutto sopravvive al riavvio
+Fase 0   Pulizia + Avalonia 12 + svuota demo       → build verde
+Fase 1   Core a istanze + breakpoint + path fix    → dotnet test verde
+Fase 2   Dock + ViewModel                           → shell dockabile
+Fase 2b  Menu IDE + Toolbar + Temi                  → chrome completo, temi funzionanti
+Fase 3   Editor + margine + renderer debug          → breakpoint cliccabili, riga evidenziata
+Fase 4   Syntax highlighting (.xshd)                → 35 opcode colorati
+Fase 5   Pannelli (reg/mem/stack/errori)            → reattivi a ogni step
+Fase 6   Dialog + IStorageProvider                  → opzioni/loop/apri-salva
+Fase 7   Persistenza (layout/recenti/bkpt)          → tutto sopravvive al riavvio
 ```

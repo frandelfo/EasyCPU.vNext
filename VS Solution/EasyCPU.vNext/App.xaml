@@ -2,8 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:EasyCPU.vNext"
              xmlns:dockTheme="clr-namespace:Dock.Avalonia.Themes.Fluent;assembly=Dock.Avalonia.Themes.Fluent"
-             x:Class="EasyCPU.vNext.App"
-             RequestedThemeVariant="Dark">
+             x:Class="EasyCPU.vNext.App">
     <Application.DataTemplates>
         <local:ViewLocator />
     </Application.DataTemplates>

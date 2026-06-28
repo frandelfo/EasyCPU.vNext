@@ -128,6 +128,18 @@ I dettagli completi (passi puntuali, problemi noti) sono in `GUIDA-SVILUPPO.md`:
   6. `MainWindowViewModel.cs` è stato riusato (classe rinominata a `MainViewModel`); il file non è stato spostato.
   7. Aggiunta `#nullable enable` nei file che usano annotazioni nullable (`?`) per evitare CS8632.
 
+### Fase 2b — Menu IDE + Toolbar + Temi ✅ COMPLETATA (2026-06-28)
+- **Tocca**: `EasyCPU.vNext/App.xaml`, `App.xaml.cs`, `Views/MainWindow.xaml`, `Views/MainView.axaml`, `ViewModels/MainWindowViewModel.cs` (rinominato `MainViewModel`), `ViewModels/SettingsViewModel.cs`, `DockFactory.cs`; nuovo file `AppTheme.cs`; `EasyCPU.vNext.csproj` (fix item type).
+- **DoD**: menu in-window + `NativeMenu` desktop; touch toolbar mobile/browser; temi Light/Dark/Blue funzionanti senza riavvio; voci Finestre checkable via `IDockable.DockingState`; tutti i nuovi comandi come stub non crashano.
+- **Gate**: build 0 errori, 6 test pass, app avviata senza crash.
+- **Assunzioni registrate** (dettagli in `GUIDA-SVILUPPO.md` §Fase 2b → "Assunzioni e decisioni"):
+  1. `NativeMenuItem` non supporta compiled bindings per `ToggleType`/`IsChecked` (AVLN3000). Il `NativeMenu` ha solo Header+Command+Gesture; i checkmark sono solo sull'`<Menu>` in-window.
+  2. Blue theme via `FluentTheme.Palettes[ThemeVariant.Dark] = new ColorPaletteResources { Accent = Color.Parse("#007ACC") }`. L'approccio precedente con `Application.Resources["SystemAccentColor"]` non differenziava Blue da Dark. `ThemeDictionaries` XAML con `{x:Static}` come key causa crash silenzioso del precompiler. `using System.Linq;` richiesto per `Styles.OfType<FluentTheme>()` (altrimenti risolve verso `Avalonia.Styling.Selectors.OfType`).
+  3. Dock 12: pannelli chiusi dalla X del tab NON impostano `DockingState = Hidden` — vengono rimossi dall'albero. `RestoreDockable` funziona solo se il pannello è stato nascosto via `HideDockable`. Il menu Finestre usa comandi `ShowXxx` (non toggle con checkmark); per pannelli chiusi dalla X l'unico ripristino è `ResetLayout`.
+  4. Avalonia 12 non ha il controllo `ToolBar`. Sostituito con `<Border>` + `<StackPanel Orientation="Horizontal">`.
+  5. `App.xaml` (estensione `.xaml`) va incluso come `<AvaloniaXaml>` nel csproj, non `<AvaloniaResource>`: altrimenti il precompiler non genera il bytecode e `AvaloniaXamlLoader.Load()` lancia `XamlLoadException` a runtime.
+  6. Su macOS il `<Menu>` in-window viene nascosto a runtime con `FindControl<Menu>("MainMenu").IsVisible = false` (richiede `using System;` per `OperatingSystem.IsMacOS()`). Il `NativeMenu` copre già tutto nella barra di sistema.
+
 ### Fase 3 — Editor con debug
 - **Tocca**: `EasyCPU.vNext/` (BreakpointMargin, DebugCurrentLineRenderer, CodeEditorView, logica EasyEditor su AvaloniaEdit).
 - **DoD**: margine breakpoint cliccabile collegato a `MainViewModel.Breakpoints`; evidenziazione riga corrente; Tab/Enter rispettano `MargineSinistro`.

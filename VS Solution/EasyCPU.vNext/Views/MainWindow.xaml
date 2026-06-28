@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Dock.Avalonia.Controls;assembly=Dock.Avalonia"
         xmlns:vm="clr-namespace:EasyCPU.vNext.ViewModels"
@@ -7,5 +7,163 @@
         Title="EasyCPU.vNext"
         Width="1400" Height="900"
         MinWidth="800" MinHeight="600">
-    <controls:DockControl Layout="{Binding Layout}" Factory="{Binding DockFactory}" />
+
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="File">
+                <NativeMenuItem.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Nuovo"          Command="{Binding NewCommand}"    Gesture="Meta+N"/>
+                        <NativeMenuItem Header="Apri..."        Command="{Binding OpenCommand}"   Gesture="Meta+O"/>
+                        <NativeMenuItem Header="Salva"          Command="{Binding SaveCommand}"   Gesture="Meta+S"/>
+                        <NativeMenuItem Header="Salva come..."  Command="{Binding SaveAsCommand}" Gesture="Meta+Shift+S"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Stampa"         Command="{Binding PrintCommand}"  Gesture="Meta+P"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Esci"           Command="{Binding ExitCommand}"   Gesture="Meta+Q"/>
+                    </NativeMenu>
+                </NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="Modifica">
+                <NativeMenuItem.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Annulla"         Command="{Binding UndoCommand}"      Gesture="Meta+Z"/>
+                        <NativeMenuItem Header="Ripristina"      Command="{Binding RedoCommand}"      Gesture="Meta+Shift+Z"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Taglia"          Command="{Binding CutCommand}"       Gesture="Meta+X"/>
+                        <NativeMenuItem Header="Copia"           Command="{Binding CopyCommand}"      Gesture="Meta+C"/>
+                        <NativeMenuItem Header="Incolla"         Command="{Binding PasteCommand}"     Gesture="Meta+V"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Seleziona tutto" Command="{Binding SelectAllCommand}" Gesture="Meta+A"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Trova..."        Command="{Binding FindCommand}"      Gesture="Meta+F"/>
+                    </NativeMenu>
+                </NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="Esegui">
+                <NativeMenuItem.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Compila"                    Command="{Binding CompileCommand}"           Gesture="Meta+B"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Avvia"                      Command="{Binding RunCommand}"               Gesture="F5"/>
+                        <NativeMenuItem Header="Avvia fino a..."            Command="{Binding RunUntilCommand}"          Gesture="Ctrl+F5"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Esegui istruzione"          Command="{Binding StepIntoCommand}"         Gesture="F11"/>
+                        <NativeMenuItem Header="Passo"                      Command="{Binding StepOverCommand}"         Gesture="F10"/>
+                        <NativeMenuItem Header="Passo uscita"               Command="{Binding StepOutCommand}"          Gesture="Shift+F11"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Ferma"                      Command="{Binding StopCommand}"             Gesture="F8"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Imposta/Rimuovi breakpoint" Command="{Binding ToggleBreakpointCommand}" Gesture="F9"/>
+                    </NativeMenu>
+                </NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="Finestre">
+                <NativeMenuItem.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Editor codice" Command="{Binding ToggleCodeEditorCommand}"/>
+                        <NativeMenuItem Header="Editor dati"   Command="{Binding ToggleDataEditorCommand}"/>
+                        <NativeMenuItem Header="Registri"      Command="{Binding ToggleRegistersCommand}"/>
+                        <NativeMenuItem Header="Stack"         Command="{Binding ToggleStackCommand}"/>
+                        <NativeMenuItem Header="Memoria"       Command="{Binding ToggleMemoryCommand}"/>
+                        <NativeMenuItem Header="Errori"        Command="{Binding ToggleErrorsCommand}"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Ripristina layout" Command="{Binding ResetLayoutCommand}"/>
+                    </NativeMenu>
+                </NativeMenuItem.Menu>
+            </NativeMenuItem>
+            <NativeMenuItem Header="Strumenti">
+                <NativeMenuItem.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Opzioni..."     Command="{Binding ShowOptionsCommand}"/>
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Chiaro"         Command="{Binding SetThemeLightCommand}"/>
+                        <NativeMenuItem Header="Scuro"          Command="{Binding SetThemeDarkCommand}"/>
+                        <NativeMenuItem Header="Blue (VS Code)" Command="{Binding SetThemeBlueCommand}"/>
+                    </NativeMenu>
+                </NativeMenuItem.Menu>
+            </NativeMenuItem>
+        </NativeMenu>
+    </NativeMenu.Menu>
+
+    <DockPanel>
+        <Menu DockPanel.Dock="Top" x:Name="MainMenu">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Nuovo"          Command="{Binding NewCommand}"    InputGesture="Ctrl+N"/>
+                <MenuItem Header="_Apri..."         Command="{Binding OpenCommand}"   InputGesture="Ctrl+O"/>
+                <MenuItem Header="_Salva"           Command="{Binding SaveCommand}"   InputGesture="Ctrl+S"/>
+                <MenuItem Header="Salva _come..."   Command="{Binding SaveAsCommand}" InputGesture="Ctrl+Shift+S"/>
+                <Separator />
+                <MenuItem Header="S_tampa"          Command="{Binding PrintCommand}"  InputGesture="Ctrl+P"/>
+                <Separator />
+                <MenuItem Header="E_sci"            Command="{Binding ExitCommand}"   InputGesture="Alt+F4"/>
+            </MenuItem>
+            <MenuItem Header="_Modifica">
+                <MenuItem Header="_Annulla"           Command="{Binding UndoCommand}"      InputGesture="Ctrl+Z"/>
+                <MenuItem Header="_Ripristina"         Command="{Binding RedoCommand}"      InputGesture="Ctrl+Y"/>
+                <Separator />
+                <MenuItem Header="_Taglia"            Command="{Binding CutCommand}"       InputGesture="Ctrl+X"/>
+                <MenuItem Header="_Copia"             Command="{Binding CopyCommand}"      InputGesture="Ctrl+C"/>
+                <MenuItem Header="_Incolla"           Command="{Binding PasteCommand}"     InputGesture="Ctrl+V"/>
+                <Separator />
+                <MenuItem Header="Seleziona _tutto"   Command="{Binding SelectAllCommand}" InputGesture="Ctrl+A"/>
+                <Separator />
+                <MenuItem Header="_Trova..."          Command="{Binding FindCommand}"      InputGesture="Ctrl+F"/>
+            </MenuItem>
+            <MenuItem Header="_Esegui">
+                <MenuItem Header="_Compila"                    Command="{Binding CompileCommand}"           InputGesture="Ctrl+B"/>
+                <Separator />
+                <MenuItem Header="_Avvia"                      Command="{Binding RunCommand}"               InputGesture="F5"/>
+                <MenuItem Header="Avvia _fino a..."            Command="{Binding RunUntilCommand}"          InputGesture="Ctrl+F5"/>
+                <Separator />
+                <MenuItem Header="Esegui _istruzione"          Command="{Binding StepIntoCommand}"         InputGesture="F11"/>
+                <MenuItem Header="_Passo"                      Command="{Binding StepOverCommand}"         InputGesture="F10"/>
+                <MenuItem Header="Passo u_scita"               Command="{Binding StepOutCommand}"          InputGesture="Shift+F11"/>
+                <Separator />
+                <MenuItem Header="_Ferma"                      Command="{Binding StopCommand}"             InputGesture="F8"/>
+                <Separator />
+                <MenuItem Header="Imposta/Rimuovi _breakpoint" Command="{Binding ToggleBreakpointCommand}" InputGesture="F9"/>
+            </MenuItem>
+            <MenuItem Header="Fi_nestre">
+                <MenuItem Header="Editor _codice" ToggleType="CheckBox" Command="{Binding ToggleCodeEditorCommand}" IsChecked="{ReflectionBinding IsCodeEditorVisible, Mode=OneWay}"/>
+                <MenuItem Header="Editor _dati"   ToggleType="CheckBox" Command="{Binding ToggleDataEditorCommand}" IsChecked="{ReflectionBinding IsDataEditorVisible, Mode=OneWay}"/>
+                <MenuItem Header="_Registri"       ToggleType="CheckBox" Command="{Binding ToggleRegistersCommand}"  IsChecked="{ReflectionBinding IsRegistersVisible,  Mode=OneWay}"/>
+                <MenuItem Header="_Stack"          ToggleType="CheckBox" Command="{Binding ToggleStackCommand}"      IsChecked="{ReflectionBinding IsStackVisible,      Mode=OneWay}"/>
+                <MenuItem Header="_Memoria"        ToggleType="CheckBox" Command="{Binding ToggleMemoryCommand}"     IsChecked="{ReflectionBinding IsMemoryVisible,     Mode=OneWay}"/>
+                <MenuItem Header="_Errori"         ToggleType="CheckBox" Command="{Binding ToggleErrorsCommand}"     IsChecked="{ReflectionBinding IsErrorsVisible,     Mode=OneWay}"/>
+                <Separator />
+                <MenuItem Header="Ripristina _layout" Command="{Binding ResetLayoutCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Strumenti">
+                <MenuItem Header="_Opzioni..."  Command="{Binding ShowOptionsCommand}"/>
+                <Separator />
+                <MenuItem Header="Tema">
+                    <MenuItem Header="_Chiaro"         ToggleType="Radio" Command="{Binding SetThemeLightCommand}" IsChecked="{Binding IsThemeLight, Mode=OneWay}"/>
+                    <MenuItem Header="_Scuro"           ToggleType="Radio" Command="{Binding SetThemeDarkCommand}"  IsChecked="{Binding IsThemeDark,  Mode=OneWay}"/>
+                    <MenuItem Header="_Blue (VS Code)"  ToggleType="Radio" Command="{Binding SetThemeBlueCommand}"  IsChecked="{Binding IsThemeBlue,  Mode=OneWay}"/>
+                </MenuItem>
+            </MenuItem>
+        </Menu>
+
+        <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+            <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,2">
+                <Button Content="Nuovo"     Command="{Binding NewCommand}"           ToolTip.Tip="Nuovo (Ctrl+N)"            Padding="8,4"/>
+                <Button Content="Apri"      Command="{Binding OpenCommand}"          ToolTip.Tip="Apri (Ctrl+O)"             Padding="8,4"/>
+                <Button Content="Salva"     Command="{Binding SaveCommand}"          ToolTip.Tip="Salva (Ctrl+S)"            Padding="8,4"/>
+                <Separator Width="1" Height="20" Margin="4,0"/>
+                <Button Content="Compila"   Command="{Binding CompileCommand}"       ToolTip.Tip="Compila (Ctrl+B)"          Padding="8,4"/>
+                <Button Content="Avvia"     Command="{Binding RunCommand}"           ToolTip.Tip="Avvia (F5)"                Padding="8,4"/>
+                <Button Content="Ferma"     Command="{Binding StopCommand}"          ToolTip.Tip="Ferma (F8)"                Padding="8,4"/>
+                <Button Content="Step Into" Command="{Binding StepIntoCommand}"      ToolTip.Tip="Esegui istruzione (F11)"   Padding="8,4"/>
+                <Button Content="Step Over" Command="{Binding StepOverCommand}"      ToolTip.Tip="Passo (F10)"               Padding="8,4"/>
+                <Button Content="Step Out"  Command="{Binding StepOutCommand}"       ToolTip.Tip="Passo uscita (Shift+F11)"  Padding="8,4"/>
+                <Separator Width="1" Height="20" Margin="4,0"/>
+                <Button Content="Chiaro"    Command="{Binding SetThemeLightCommand}" ToolTip.Tip="Tema chiaro"               Padding="8,4"/>
+                <Button Content="Scuro"     Command="{Binding SetThemeDarkCommand}"  ToolTip.Tip="Tema scuro"                Padding="8,4"/>
+                <Button Content="Blue"      Command="{Binding SetThemeBlueCommand}"  ToolTip.Tip="Tema Blue (VS Code)"       Padding="8,4"/>
+            </StackPanel>
+        </Border>
+
+        <controls:DockControl Layout="{Binding Layout}" Factory="{Binding DockFactory}" />
+    </DockPanel>
 </Window>

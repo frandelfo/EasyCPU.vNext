@@ -19,7 +19,7 @@
       <SubType>Code</SubType>
     </Compile>
     <AvaloniaResource Include="Assets\**" />
-    <AvaloniaResource Include="**\*.xaml" />
+    <AvaloniaXaml Include="**\*.xaml" />
   </ItemGroup>
 
   <ItemGroup>
