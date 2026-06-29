@@ -422,6 +422,32 @@ Lo stato vivo (dump registri/memoria/stack, errori) vive in `MainViewModel`; i p
 - **TextMate vs renderer custom**: l'highlighting TextMate e il `IBackgroundRenderer` lavorano su layer diversi; verificare l'ordine di disegno (il giallo della riga non deve coprire il testo).
 - **AvaloniaEdit 12 API**: alcune firme (`AbstractMargin`, `VisualLine`) sono cambiate rispetto a esempi vecchi (11.x). Usare la documentazione 12.
 
+### Assunzioni e decisioni (registrate durante l'esecuzione — 2026-06-29)
+
+1. **`AbstractMargin` non ha `Background` — hit testing su aree vuote**
+   `AbstractMargin` estende `Control`, non `TemplatedControl`: la proprietà `Background` non è disponibile. Senza contenuto disegnato nel `Render()`, Avalonia non supera l'hit test sull'area vuota del margine: `OnPointerPressed` viene chiamato solo cliccando su un pallino già disegnato, non sull'area vuota. Fix: disegnare un fill quasi-trasparente (`new SolidColorBrush(Color.FromArgb(1, 0, 0, 0))`) all'inizio di `Render()` per coprire l'intera area, rendendo il controllo hit-testable ovunque. NON usare `Background` (non disponibile su `Control`).
+
+2. **Click handling breakpoint — solo `BreakpointMargin.OnPointerPressed`**
+   Il toggle va gestito esclusivamente dall'override di `OnPointerPressed` in `BreakpointMargin`. Aggiungere handler aggiuntivi sul `LineNumberMargin` (via `AddHandler` con `handledEventsToo: true`) causa double-toggle e attivazione senza disattivazione. L'unico punto di ingresso per il toggle da UI è `BreakpointMargin.OnPointerPressed`.
+
+3. **`TextView.VisualLinesChanged` — obbligatorio per ridisegno pallini**
+   Senza sottoscrivere `TextView.VisualLinesChanged` e chiamare `InvalidateVisual()` nel handler, i pallini non vengono ridisegnati dopo che AvaloniaEdit ricostruisce le `VisualLines` (es. al primo click o al resize). Override di `OnTextViewChanged` per gestire subscribe/unsubscribe sull'old/new TextView.
+
+4. **Calcolo numero di riga — aritmetica diretta**
+   `textView.GetVisualLineFromVisualTop(y)` può restituire `null` nelle aree di gap tra righe visuali. Calcolo robusto: `int lineNumber = (int)(docY / lineHeight) + 1`, dove `docY = e.GetPosition(this).Y + textView.VerticalOffset`. Usare `textView.DefaultLineHeight` (non `DefaultLineHeight` da VisualLines, che richiede righe già costruite).
+
+5. **Clipboard — API completamente cambiata in Avalonia 12.0.5**
+   `IClipboard.SetTextAsync(string)` e `GetTextAsync()` non esistono più. Scrittura: `DataTransferItem.CreateText(text)` + `new DataTransfer()` + `clipboard.SetDataAsync(transfer)`. Lettura: `await clipboard.TryGetDataAsync()` + `await AsyncDataTransferExtensions.TryGetTextAsync(data)`. Tutto in `Avalonia.Input`. `GetCurrentPoint` accetta `Visual?` (non `IInputElement`): passare `null` per coordinate assolute.
+
+6. **`SearchPanel.Install()` prende `TextEditor`, non `TextArea`**
+   In AvaloniaEdit 12, la firma corretta è `SearchPanel.Install(TextEditor editor)`. Passare `_editor.TextArea` causa `CS1503` a compile time.
+
+7. **Testo pannello perso su hide/show — causa Dock.Avalonia**
+   Dock.Avalonia ricrea `CodeEditorView` ogni volta che il pannello viene nascosto e rimostrato. Fix: `_editor.Document.Changed` sincronizza il testo in `CodeEditorViewModel.SourceText`; `OnDataContextChanged` ripristina `_editor.Document.Text = vm.SourceText` al riattach. Stessa logica in `DataEditorView`.
+
+8. **DataEditorView — editor AvaloniaEdit completo + separazione compilazione**
+   Il pannello `.DATA` ha un editor AvaloniaEdit autonomo (senza `BreakpointMargin` né `DebugCurrentLineRenderer`). `Compile()` in `MainViewModel` legge `_factory.CodeEditor.SourceText` e `_factory.DataEditor.SourceText` separatamente; non usa più lo split sulla stringa `.DATA` dentro il pannello codice.
+
 ---
 
 ## FASE 4 — Syntax highlighting (subset x86 reale)

@@ -1,17 +1,70 @@
+#nullable enable
+using System;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using AvaloniaEdit;
+using EasyCpu.Common;
+using EasyCPU.vNext.ViewModels;
 
 namespace EasyCPU.vNext.Views;
 
 public partial class DataEditorView : UserControl
 {
+    private TextEditor? _editor;
+
     public DataEditorView()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
     }
 
     private void InitializeComponent()
     {
         AvaloniaXamlLoader.Load(this);
+        _editor = this.FindControl<TextEditor>("Editor");
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (_editor == null) return;
+        if (DataContext is DataEditorViewModel vm)
+            SetupEditor(vm);
+    }
+
+    private void SetupEditor(DataEditorViewModel vm)
+    {
+        if (_editor == null) return;
+
+        if (!string.IsNullOrEmpty(vm.SourceText))
+            _editor.Document.Text = vm.SourceText;
+
+        _editor.Document.Changed += (_, _) =>
+            vm.SourceText = _editor.Document.Text;
+
+        _editor.TextArea.TextEntering += OnTextEntering;
+    }
+
+    private void OnTextEntering(object? sender, TextInputEventArgs e)
+    {
+        if (_editor == null) return;
+        int margin = Ambiente.MargineSinistro;
+
+        if (e.Text == "\t")
+        {
+            e.Handled = true;
+            int col = _editor.TextArea.Caret.Column - 1;
+            int spaces = margin - (col % margin);
+            _editor.TextArea.Document.Insert(
+                _editor.TextArea.Caret.Offset,
+                new string(' ', spaces));
+        }
+        else if (e.Text == "\n")
+        {
+            e.Handled = true;
+            _editor.TextArea.Document.Insert(
+                _editor.TextArea.Caret.Offset,
+                Environment.NewLine + new string(' ', margin));
+        }
     }
 }

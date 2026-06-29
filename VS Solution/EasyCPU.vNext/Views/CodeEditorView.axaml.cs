@@ -1,17 +1,145 @@
+#nullable enable
+using System;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using AvaloniaEdit;
+using AvaloniaEdit.Editing;
+using AvaloniaEdit.Rendering;
+using AvaloniaEdit.Search;
+using EasyCpu.Common;
+using EasyCPU.vNext.ViewModels;
+using EasyCPU.vNext.Views.Editor;
+using AvaInput = Avalonia.Input;
 
 namespace EasyCPU.vNext.Views;
 
 public partial class CodeEditorView : UserControl
 {
+    private TextEditor? _editor;
+
     public CodeEditorView()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
     }
 
     private void InitializeComponent()
     {
         AvaloniaXamlLoader.Load(this);
+        _editor = this.FindControl<TextEditor>("Editor");
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (_editor == null) return;
+        if (DataContext is CodeEditorViewModel vm)
+            SetupEditor(vm);
+    }
+
+    private void SetupEditor(CodeEditorViewModel vm)
+    {
+        if (_editor == null) return;
+
+        // Breakpoint margin visuale — inserito prima del margine numeri di riga
+        var bpMargin = new BreakpointMargin(vm.MainVm);
+        _editor.TextArea.LeftMargins.Insert(0, bpMargin);
+
+        // Renderer che evidenzia la riga corrente dell'IP
+        var lineRenderer = new DebugCurrentLineRenderer(vm.MainVm);
+        _editor.TextArea.TextView.BackgroundRenderers.Add(lineRenderer);
+
+        // Invalidare il layer di sfondo quando CurrentSourceLine cambia
+        vm.MainVm.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(MainViewModel.CurrentSourceLine))
+                _editor.TextArea.TextView.InvalidateLayer(KnownLayer.Background);
+        };
+
+        // Carica il testo salvato nel ViewModel (es. dopo hide/show del pannello)
+        if (!string.IsNullOrEmpty(vm.SourceText))
+            _editor.Document.Text = vm.SourceText;
+
+        // Mantiene SourceText sincronizzato con il documento
+        _editor.Document.Changed += (_, _) =>
+            vm.SourceText = _editor.Document.Text;
+
+        // Mantiene CurrentLine sincronizzato con il caret (1-based)
+        _editor.TextArea.Caret.PositionChanged += (_, _) =>
+            vm.CurrentLine = _editor.TextArea.Caret.Line;
+
+        // Tab e Enter personalizzati (EasyEditor: margine sinistro)
+        _editor.TextArea.TextEntering += OnTextEntering;
+
+        // ── Operazioni Modifica ───────────────────────────────────────────────
+        vm.UndoAction      = () => _editor.Undo();
+        vm.RedoAction      = () => _editor.Redo();
+        vm.CutAction       = CutSelection;
+        vm.CopyAction      = CopySelection;
+        vm.PasteAction     = PasteFromClipboard;
+        vm.SelectAllAction = () => _editor.TextArea.Selection =
+            Selection.Create(_editor.TextArea, 0, _editor.Document.TextLength);
+        vm.FindAction      = () => SearchPanel.Install(_editor).Open();
+    }
+
+    private void CopySelection()
+    {
+        var text = _editor?.SelectedText;
+        if (string.IsNullOrEmpty(text)) return;
+        var clipboard = TopLevel.GetTopLevel(_editor)?.Clipboard;
+        if (clipboard == null) return;
+        var item = AvaInput.DataTransferItem.CreateText(text);
+        var transfer = new AvaInput.DataTransfer();
+        transfer.Add(item);
+        _ = clipboard.SetDataAsync(transfer);
+    }
+
+    private void CutSelection()
+    {
+        var text = _editor?.SelectedText;
+        if (string.IsNullOrEmpty(text)) return;
+        var clipboard = TopLevel.GetTopLevel(_editor)?.Clipboard;
+        if (clipboard == null) return;
+        var item = AvaInput.DataTransferItem.CreateText(text);
+        var transfer = new AvaInput.DataTransfer();
+        transfer.Add(item);
+        _ = clipboard.SetDataAsync(transfer);
+        _editor!.TextArea.Selection.ReplaceSelectionWithText("");
+    }
+
+    private async void PasteFromClipboard()
+    {
+        var clipboard = TopLevel.GetTopLevel(_editor)?.Clipboard;
+        if (clipboard == null) return;
+        var data = await clipboard.TryGetDataAsync();
+        if (data == null) return;
+        var text = await AvaInput.AsyncDataTransferExtensions.TryGetTextAsync(data);
+        if (text != null)
+            _editor!.TextArea.Selection.ReplaceSelectionWithText(text);
+    }
+
+    private void OnTextEntering(object? sender, TextInputEventArgs e)
+    {
+        if (_editor == null) return;
+        int margin = Ambiente.MargineSinistro;
+
+        if (e.Text == "\t")
+        {
+            // Tab → spazi fino al prossimo multiplo di MargineSinistro
+            e.Handled = true;
+            int col = _editor.TextArea.Caret.Column - 1; // 0-based
+            int spaces = margin - (col % margin);
+            _editor.TextArea.Document.Insert(
+                _editor.TextArea.Caret.Offset,
+                new string(' ', spaces));
+        }
+        else if (e.Text == "\n")
+        {
+            // Enter → nuova riga con MargineSinistro spazi
+            e.Handled = true;
+            _editor.TextArea.Document.Insert(
+                _editor.TextArea.Caret.Offset,
+                Environment.NewLine + new string(' ', margin));
+        }
     }
 }

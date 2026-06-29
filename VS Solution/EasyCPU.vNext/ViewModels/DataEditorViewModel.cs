@@ -4,4 +4,5 @@ namespace EasyCPU.vNext.ViewModels;
 
 public partial class DataEditorViewModel : Document
 {
+    public string SourceText { get; set; } = "";
 }

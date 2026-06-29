@@ -1,7 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:EasyCPU.vNext.ViewModels"
+             xmlns:avaloniaEdit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
              x:Class="EasyCPU.vNext.Views.DataEditorView"
              x:DataType="vm:DataEditorViewModel">
-    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Text="Editor Dati" />
+    <avaloniaEdit:TextEditor
+        Name="Editor"
+        FontFamily="Cascadia Code, Courier New, Consolas, monospace"
+        FontSize="14"
+        ShowLineNumbers="True" />
 </UserControl>

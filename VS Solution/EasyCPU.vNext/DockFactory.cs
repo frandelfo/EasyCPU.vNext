@@ -43,7 +43,7 @@ public class DockFactory : Factory
 
     public override IRootDock CreateLayout()
     {
-        CodeEditor = new CodeEditorViewModel { Id = "CodeEditor", Title = "Codice" };
+        CodeEditor = new CodeEditorViewModel(_mainVm) { Id = "CodeEditor", Title = "Codice" };
         DataEditor = new DataEditorViewModel { Id = "DataEditor", Title = "Dati" };
         Registers  = new RegistersViewModel  { Id = "Registers",  Title = "Registri" };
         Stack      = new StackViewModel      { Id = "Stack",      Title = "Stack" };

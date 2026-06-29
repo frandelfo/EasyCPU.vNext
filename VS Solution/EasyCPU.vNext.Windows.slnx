@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+  </Folder>
+  <Project Path="EasyCPU.vNext/EasyCPU.vNext.csproj" />
+  <Project Path="EasyCPU.vNext.Desktop/EasyCPU.vNext.Desktop.csproj" />
+  <Folder Name="/BusinessLogic/">
+    <Project Path="EasyCpu.Assembler/EasyCpu.Assembler.csproj" />
+    <Project Path="EasyCpu.Common/EasyCpu.Common.csproj" />
+    <Project Path="EasyCpu.Assembler.Tests/EasyCpu.Assembler.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Backend/">
+    <Project Path="EasyCpu.Backend/EasyCpu.Backend.csproj" />
+  </Folder>
+</Solution>

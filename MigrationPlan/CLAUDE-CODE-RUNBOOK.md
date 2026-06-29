@@ -140,10 +140,19 @@ I dettagli completi (passi puntuali, problemi noti) sono in `GUIDA-SVILUPPO.md`:
   5. `App.xaml` (estensione `.xaml`) va incluso come `<AvaloniaXaml>` nel csproj, non `<AvaloniaResource>`: altrimenti il precompiler non genera il bytecode e `AvaloniaXamlLoader.Load()` lancia `XamlLoadException` a runtime.
   6. Su macOS il `<Menu>` in-window viene nascosto a runtime con `FindControl<Menu>("MainMenu").IsVisible = false` (richiede `using System;` per `OperatingSystem.IsMacOS()`). Il `NativeMenu` copre già tutto nella barra di sistema.
 
-### Fase 3 — Editor con debug
-- **Tocca**: `EasyCPU.vNext/` (BreakpointMargin, DebugCurrentLineRenderer, CodeEditorView, logica EasyEditor su AvaloniaEdit).
-- **DoD**: margine breakpoint cliccabile collegato a `MainViewModel.Breakpoints`; evidenziazione riga corrente; Tab/Enter rispettano `MargineSinistro`.
-- **Gate**: toggle breakpoint funziona; riga corrente si muove a ogni step; verifica offset 0-based/1-based corretto.
+### Fase 3 — Editor con debug ✅ COMPLETATA (2026-06-29)
+- **Tocca**: `EasyCPU.vNext/` (BreakpointMargin, DebugCurrentLineRenderer, CodeEditorView, DataEditorView, DataEditorViewModel, MainWindowViewModel).
+- **DoD**: margine breakpoint cliccabile collegato a `MainViewModel.Breakpoints`; evidenziazione riga corrente; Tab/Enter rispettano `MargineSinistro`; testo pannelli persistente su hide/show; Data Editor con editor AvaloniaEdit reale; `Compile()` legge codice e dati da pannelli separati.
+- **Gate**: toggle breakpoint funziona cliccando sul margine sinistro; riga corrente si muove a ogni step; build 0 errori.
+- **Assunzioni registrate** (dettagli in `GUIDA-SVILUPPO.md` §Fase 3 → "Assunzioni e decisioni"):
+  1. `AbstractMargin` non ha `Background`: le aree senza contenuto disegnato non superano l'hit test. Fix: fill quasi-trasparente (`Color.FromArgb(1,0,0,0)`) all'inizio di `Render()`.
+  2. Click handling solo in `BreakpointMargin.OnPointerPressed` — nessun handler sul `LineNumberMargin`.
+  3. `TextView.VisualLinesChanged` obbligatorio per ridisegnare i pallini dopo rebuild.
+  4. Calcolo riga via aritmetica diretta (`(int)(docY / lineHeight) + 1`), non `GetVisualLineFromVisualTop` (può restituire null).
+  5. Clipboard Avalonia 12: `DataTransferItem.CreateText` + `DataTransfer` + `SetDataAsync`; lettura: `TryGetDataAsync` + `AsyncDataTransferExtensions.TryGetTextAsync`.
+  6. `SearchPanel.Install()` prende `TextEditor`, non `TextArea`.
+  7. Dock.Avalonia ricrea la View su hide/show: testo va salvato in `SourceText` del ViewModel e ripristinato in `OnDataContextChanged`.
+  8. Pannello dati: `Compile()` legge `_factory.DataEditor.SourceText` direttamente, non più via split `.DATA` sul codice.
 
 ### Fase 4 — Syntax highlighting
 - **Tocca**: nuovo `.xshd` (EmbeddedResource) + caricamento nell'editor.
