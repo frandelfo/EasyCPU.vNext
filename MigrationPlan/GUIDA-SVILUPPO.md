@@ -470,30 +470,214 @@ Lo stato vivo (dump registri/memoria/stack, errori) vive in `MainViewModel`; i p
 - **Distinzione dati/codice**: il file ha due sezioni separate da `.DATA`; l'highlighting non distingue le sezioni — accettabile, ma documentarlo.
 - **Numeri hex**: il parser usa `HexToInt`/suffisso `h`; allineare la regex `.xshd` a quel formato, non a `0x…`.
 
+### Assunzioni e decisioni (registrate durante l'esecuzione — 2026-06-29)
+
+1. **36 opcode in `Parser.SetCode`, non 35**
+   Conteggio esatto dal sorgente: 36 voci (`mov movs add sub cmp and or xor not neg mul div inc dec push pop pushf popf call jcxz je jg jl jle jge jmp jne jo jno js jns ret nop stop shl shr`). L'Appendice A di questa guida diceva 35 — va corretta.
+
+2. **Registrazione highlighting tramite `HighlightingManager`**
+   L'`.xshd` è un `EmbeddedResource` in `EasyCPU.vNext/Resources/EasyCPU.xshd`. Viene caricato in `App.OnFrameworkInitializationCompleted()` prima di tutto il resto (prima di `Ambiente.Inizializza`), così le view lo trovano già registrato al momento del loro `SetupEditor()`. Il nome registrato è `"EasyCPU"`, le estensioni associate `.as` e `.asj`.
+
+3. **`new XmlTextReader(stream)`, non `XmlReader.Create()`**
+   `HighlightingLoader.Load()` di AvaloniaEdit 12 accetta `XmlReader`. Si usa `XmlTextReader` (che eredita da `XmlReader`) per evitare configurazioni aggiuntive di `DtdProcessing`. `XmlReader.Create()` richiederebbe `DtdProcessing.Ignore` per non sollevare warning.
+
+4. **Nome risorsa embedded**
+   Il RootNamespace del progetto è `EasyCPU.vNext` (inferred dall'SDK, nessun `<RootNamespace>` esplicito nel csproj). Il file è in `Resources/EasyCPU.xshd`. Il nome manifest risultante è `EasyCPU.vNext.Resources.EasyCPU.xshd`. Se il nome cambia (es. in seguito a rename del progetto), aggiornare la stringa in `App.RegisterEasyCpuHighlighting()`.
+
+5. **`DataEditorView` — stesso highlighting applicato**
+   Il pannello dati contiene numeri, etichette e costanti hex con la stessa sintassi del pannello codice. Applicare lo stesso `.xshd` è corretto e conveniente. Gli opcode non appariranno nel pannello dati in uso normale, ma non danno fastidio se presenti.
+
+6. **Palette colori finale — opcode differenziati per categoria**
+   Prima iterazione: tutti gli opcode con un unico colore blu. Seconda iterazione: 7 categorie con colori distinti, ma Aritmetica/Salti/Stack erano tutti nel range arancio-rosso-marrone e Movimento/Confronto entrambi nel range blu-viola. Palette finale distribuita sull'intero cerchio cromatico (ottimizzata per tema Light, default dell'app):
+
+   | Categoria | Opcode | Colore |
+   |---|---|---|
+   | Movimento | `mov movs` | `#1565C0` blu |
+   | Aritmetica | `add sub mul div inc dec neg` | `#E65100` arancio |
+   | Logica/shift | `and or xor not shl shr` | `#0F766E` teal |
+   | Confronto | `cmp` | `#AD1457` rosa scuro |
+   | Stack | `push pop pushf popf` | `#4527A0` indaco |
+   | Salti/controllo | `jmp j* call ret jcxz` | `#C62828` rosso |
+   | Varie | `nop stop` | `#546E7A` grigio-blu |
+
+   Su tema Dark/Blue i colori rimangono leggibili ma non ottimali — miglioramento estetico rimandato a scelta futura.
+
+7. **Distinzione sezione codice/dati nell'highlighting**
+   L'`.xshd` non distingue la sezione codice dalla sezione dati (sopra/sotto `.DATA`): entrambi i pannelli usano le stesse regole. Accettabile: i due pannelli sono editor separati e il contesto è implicito.
+
 ---
 
 ## FASE 5 — Pannelli dockabili (contenuto)
 
 **Obiettivo:** Registri, Memoria, Stack, Errori popolati e reattivi.
 
+### Stato degli stub (verificato al 2026-06-29)
+
+Tutti e quattro i pannelli hanno ViewModel e View già creati in Fase 2, ma completamente vuoti:
+
+| ViewModel | Stato attuale | View attuale |
+|---|---|---|
+| `RegistersViewModel` | `Tool` + `[ObservableProperty] string _dump` | `TextBlock Text="Registri"` |
+| `MemoryViewModel` | `Tool` + `[ObservableProperty] string _dump` | `TextBlock Text="Memoria"` |
+| `StackViewModel` | `Tool` + `[ObservableProperty] string _dump` | `TextBlock Text="Stack"` |
+| `ErrorsViewModel` | `Tool` + `ObservableCollection<CompilerError> Errors` | `TextBlock Text="Errori"` |
+
+`MainViewModel` ha già i commenti `// TODO Fase 5` nel punto esatto dove andranno i dump:
+- In `Compile()` riga ~212: `if (instructions == null) return; // TODO Fase 5: mostrare errori`
+- In `Run()` riga ~241: `catch (CpuException) { } // TODO Fase 5: mostrare errore`
+
+`_factory.Registers`, `_factory.Memory`, `_factory.Stack`, `_factory.Errors` sono già esposti da `DockFactory` — `MainViewModel` li raggiunge via `_factory`.
+
+### API del core (firme verificate)
+
+```csharp
+// Registri — array di 9 stringhe "AX = 42" formattate per Ambiente.FR
+string[] Cpu.DumpRegs()
+
+// Registri — singolo registro con formato esteso (hex/dec/bin/char)
+string Cpu.DumpReg(int indReg)   // 0=AX … 8=IP
+
+// Memoria — List<string> di righe "indirizzo: val val val …"
+// Ritorna null se Cpu non è ancora inizializzata (guard prima di usarla)
+List<string>? Cpu.DumpMemoria(int da, int a, int colonne)
+
+// Costanti Ram
+Ram.INDIRIZZO_STACK   // 240
+Ram.MASSIMO_INDIRIZZO // 255
+
+// Colonne per il dump Stack
+Ambiente.ColonneStack  // default 1
+
+// Flag — proprietà pubbliche già presenti (flags è private)
+bool Cpu.FlagZero      // ZF
+bool Cpu.FlagSegno     // SF
+bool Cpu.FlagOverflow  // OF
+```
+
+**Nota `DumpReg` vs `DumpRegs`**: `DumpRegs()` produce righe brevi (`AX = 42`), utile per un pannello compatto. `DumpReg(i)` produce la riga estesa (`AX = [HEX: 002Ah] [BIN: 000…] [CAR: *]`), utile se si vuole espandere un registro. Usare `DumpRegs()` per il display normale.
+
+**Attenzione `DumpReg`**: in `Cpu.DumpReg`, se `Ambiente.FormatoDati != Hex` la riga mostra `[HEX: …]`, altrimenti `[DEC: …]` — sembra invertito rispetto al nome. Verificare su `EasyCpu.Win` se è il comportamento atteso o un bug storico; documentare la decisione prima di usarlo.
+
+### Errori di compilazione
+
+```csharp
+// CompilerError — campi pubblici
+string Msg
+int    Riga     // 0-based (indice compilatore) — display: Riga + 1
+int    Colonna  // 0-based
+int    Tipo     // CompilerError.CODICE = 0, CompilerError.DATI = 1
+
+// Formati ToString
+error.ToString()        // "riga+1: messaggio"
+error.ToString("T", null) // "[Codice] (riga+1) messaggio"
+```
+
 ### Passi
 
-- `RegistersView`: 9 registri `AX..IP` + flag `Z/S/O`. Riusare `Cpu.DumpRegs()` (formato già pronto) o esporre proprietà tipizzate.
-- `MemoryView`: dump `Cpu.DumpMemoria(0, Ram.INDIRIZZO_STACK, colonne)` (indirizzi 0–239).
-- `StackView`: dump `Cpu.DumpMemoria(Ram.INDIRIZZO_STACK, Ram.MASSIMO_INDIRIZZO + 1, Ambiente.ColonneStack)` (240–255).
-- `ErrorsView`: `DataGrid` di `CompilerError` (usa `Riga+1` per il display, vedi `CompilerError.ToString("T")`); doppio click → posiziona cursore su riga/colonna.
-- Aggiornare tutti i pannelli **dopo ogni step/run** (un metodo `RefreshDebugViews()` chiamato dal `MainViewModel`).
+**1. `RefreshDebugViews()` in `MainViewModel`**
+
+Aggiungere il metodo privato e chiamarlo dove già c'è `UpdateCurrentSourceLine()` (dopo ogni step/run/stop). Senza questo, i dump non si aggiornano mai.
+
+```csharp
+private void RefreshDebugViews()
+{
+    // Registri
+    var regs = Cpu.DumpRegs();
+    if (_factory.Registers is { } rv)
+        rv.Dump = string.Join("\n", regs) +
+                  $"\nZ={(Cpu.FlagZero ? 1 : 0)}  S={(Cpu.FlagSegno ? 1 : 0)}  O={(Cpu.FlagOverflow ? 1 : 0)}";
+
+    // Memoria (0..239, 8 colonne — nessun setting per le colonne memoria, valore fisso)
+    var mem = Cpu.DumpMemoria(0, Ram.INDIRIZZO_STACK, 8);
+    if (_factory.Memory is { } mv)
+        mv.Dump = mem is null ? "" : string.Join("\n", mem);
+
+    // Stack (240..255)
+    var stack = Cpu.DumpMemoria(Ram.INDIRIZZO_STACK, Ram.MASSIMO_INDIRIZZO + 1, Ambiente.ColonneStack);
+    if (_factory.Stack is { } sv)
+        sv.Dump = stack is null ? "" : string.Join("\n", stack);
+}
+```
+
+Chiamarlo da: `StepInto`, `StepOver`, `StepOut`, `Run` (dopo ogni operazione, prima del return), `Stop`, `Compile` (reset dump a stringa vuota).
+
+**2. Errori di compilazione in `ErrorsViewModel`**
+
+In `Compile()`, dopo aver chiamato `CompilaCodice` e `CompilaDati`, popolare `_factory.Errors.Errors`:
+
+```csharp
+var ev = _factory.Errors;
+if (ev != null)
+{
+    ev.Errors.Clear();
+    foreach (var e in codeErrors ?? []) ev.Errors.Add(e);
+    foreach (var e in dataErrors ?? []) ev.Errors.Add(e);
+}
+```
+
+Rimuovere i commenti `// TODO Fase 5` e il `return` anticipato su `instructions == null` — mostrare invece gli errori e tornare senza inizializzare la CPU.
+
+**3. View: `RegistersView.axaml`**
+
+Sostituire il `TextBlock` placeholder con un `ScrollViewer` + `TextBlock` bound a `Dump`:
+```xml
+<ScrollViewer>
+    <TextBlock Text="{Binding Dump}" FontFamily="Courier New,Monospace" FontSize="12"
+               Margin="4" TextWrapping="NoWrap" />
+</ScrollViewer>
+```
+
+Uguale per `MemoryView.axaml` e `StackView.axaml`.
+
+**4. View: `ErrorsView.axaml`**
+
+`DataGrid` con colonne esplicite bound a `CompilerError`:
+```xml
+<DataGrid ItemsSource="{Binding Errors}" IsReadOnly="True"
+          SelectionMode="Single" DoubleTapped="OnErrorDoubleTapped">
+    <DataGrid.Columns>
+        <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="60"/>
+        <DataGridTextColumn Header="Riga" Binding="{Binding Riga, StringFormat={}{0}}" Width="50"/>
+        <DataGridTextColumn Header="Messaggio" Binding="{Binding Msg}" Width="*"/>
+    </DataGridTextColumn>
+    </DataGrid.Columns>
+</DataGrid>
+```
+
+Il `Riga` nella colonna va mostrato come `Riga + 1` (display 1-based) — usare un converter o esporre una proprietà calcolata `RigaDisplay => Riga + 1` su `CompilerError`. Non modificare `CompilerError` se è nel core; preferire un converter Avalonia.
+
+**5. Doppio click su errore → naviga alla riga**
+
+Nel code-behind di `ErrorsView.axaml.cs`:
+```csharp
+private void OnErrorDoubleTapped(object? sender, TappedEventArgs e)
+{
+    if (DataContext is not ErrorsViewModel vm) return;
+    if (sender is not DataGrid grid) return;
+    if (grid.SelectedItem is not CompilerError err) return;
+    // Notify MainViewModel: naviga a err.Riga+1 in CodeEditor o DataEditor
+    // (vm ha bisogno di un riferimento a MainViewModel, pattern uguale a CodeEditorViewModel.MainVm)
+}
+```
+
+Esporre `MainVm` su `ErrorsViewModel` con lo stesso pattern di `CodeEditorViewModel` (passato dal `DockFactory` in `CreateLayout()`).
 
 ### Verifica
 
 - Eseguendo passo-passo, registri/memoria/stack cambiano coerentemente con `EasyCpu.Win` sullo stesso sorgente (confronto a vista).
-- Doppio click su un errore porta alla riga giusta.
+- Compilando un programma con errori, la `ErrorsView` si popola; compilando correttamente, si svuota.
+- Doppio click su un errore porta alla riga giusta nell'editor.
+- Fermando l'esecuzione, i dump mostrano lo stato finale della CPU.
 
 ### Problemi probabili
 
-- **Formato dati Dec/Hex/Car**: dipende da `Ambiente.FormatoDati` (e dalle stringhe `FI/FD/FR`). Il toggle deve rigenerare i dump. Attenzione: in `DumpReg` le etichette `[HEX]/[DEC]` sembrano invertite nel codice originale — decidere se replicare il bug o correggerlo (e documentarlo).
-- **Stack range**: lo stack vive in 240–255 e cresce verso il basso; la `StackView` va letta dall'alto (240) verso SP. Non invertire.
-- **Reattività**: se i dump sono stringhe ricalcolate, serve sollevare `PropertyChanged`/usare `ObservableCollection`; altrimenti la UI non si aggiorna dopo lo step.
+- **`Cpu.flags` è private** — usare le proprietà pubbliche già presenti: `Cpu.FlagZero`, `Cpu.FlagSegno`, `Cpu.FlagOverflow` (bool). Non accedere a `flags` direttamente.
+- **`DumpMemoria` ritorna `null`** se la CPU non è inizializzata (guard `if (mem is null)`).
+- **Formato dati Dec/Hex/Car**: `DumpRegs()` e `DumpMemoria` usano `Ambiente.FR`/`FI`/`FD`. Quando `SettingsViewModel.FormatoDati` cambia (Fase 6), bisogna richiamare `RefreshDebugViews()` — collegare via `PropertyChanged` su `Settings` nel costruttore di `MainViewModel` (già presente per il tema, stesso pattern).
+- **`DumpReg` etichette `[HEX]/[DEC]` invertite**: verificare su `EasyCpu.Win` prima di usare `DumpReg` — potrebbe essere un bug storico. `DumpRegs()` non ha questo problema (non stampa l'etichetta del formato).
+- **Stack range e direzione**: lo stack vive in 240–255 e cresce verso il basso; `DumpMemoria(240, 256, ...)` mostra gli indirizzi dall'alto verso il basso. Non invertire l'ordine delle righe.
+- **Colonne memoria**: `DumpMemoria` per la memoria principale (0–239) non ha un `Ambiente.*` di riferimento. Usare un valore fisso (es. 8) e documentarlo; la configurabilità è rimandabile a Fase 6.
+- **`CompilerError.Riga` 0-based nel DataGrid**: la colonna Riga deve mostrare `Riga + 1`. Opzioni: converter `IValueConverter`, proprietà calcolata `RigaDisplay` su `CompilerError` (tocca il core — evitare), o usare `StringFormat` con una classe di wrapping. Il converter è la soluzione più pulita in Avalonia 12.
 
 ---
 
@@ -699,7 +883,7 @@ nella subroutine, la logica è invertita.
 
 ## Appendice A — Set istruzioni reale (`Parser.SetCode`)
 
-35 opcode (numero operandi tra parentesi):
+**36 opcode** (numero operandi tra parentesi — il titolo originale diceva 35, ma il sorgente ne ha 36):
 
 `mov`(2) `movs`(0) `add`(2) `sub`(2) `cmp`(2) `and`(2) `or`(2) `xor`(2)
 `not`(1) `neg`(1) `mul`(1) `div`(1) `inc`(1) `dec`(1) `push`(1) `pop`(1)

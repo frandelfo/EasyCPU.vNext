@@ -1,10 +1,13 @@
 using System.Linq;
+using System.Xml;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using AvaloniaEdit.Highlighting;
+using AvaloniaEdit.Highlighting.Xshd;
 using EasyCpu.Common;
 using EasyCPU.vNext.ViewModels;
 using EasyCPU.vNext.Views;
@@ -20,6 +23,7 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        RegisterEasyCpuHighlighting();
         Ambiente.Inizializza();
         ApplyTheme(SettingsViewModel.Instance.Theme);
         var mainViewModel = new MainViewModel(SettingsViewModel.Instance);
@@ -30,6 +34,16 @@ public class App : Application
             singleView.MainView = new MainView { DataContext = mainViewModel };
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void RegisterEasyCpuHighlighting()
+    {
+        using var stream = typeof(App).Assembly
+            .GetManifestResourceStream("EasyCPU.vNext.Resources.EasyCPU.xshd");
+        if (stream is null) return;
+        using var reader = new XmlTextReader(stream);
+        var def = HighlightingLoader.Load(reader, HighlightingManager.Instance);
+        HighlightingManager.Instance.RegisterHighlighting("EasyCPU", [".as", ".asj"], def);
     }
 
     public static void ApplyTheme(AppTheme theme)

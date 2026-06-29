@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using AvaloniaEdit;
+using AvaloniaEdit.Highlighting;
 using EasyCpu.Common;
 using EasyCPU.vNext.ViewModels;
 
@@ -35,6 +36,8 @@ public partial class DataEditorView : UserControl
     private void SetupEditor(DataEditorViewModel vm)
     {
         if (_editor == null) return;
+
+        _editor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("EasyCPU");
 
         if (!string.IsNullOrEmpty(vm.SourceText))
             _editor.Document.Text = vm.SourceText;

@@ -62,7 +62,7 @@ Queste sono già verificate sul sorgente. Non re-inferirle: usale.
 - **Fetch/Execute**: `ip++` avviene a fine `Execute()`. Dopo uno step, `curIstruzione` è l'istruzione **già eseguita**; quella da eseguire è `code[ip]`.
 - **Righe**: il compilatore usa indici **0-based** (`indRiga`); AvaloniaEdit usa righe **1-based**. Converti sempre, una sola volta, in un punto noto.
 - **Memoria**: 0–255; stack 240–255 (`INDIRIZZO_STACK=240`).
-- **Set istruzioni autoritativo**: `Parser.SetCode` (35 opcode — vedi Appendice A di `GUIDA-SVILUPPO.md`). Non fidarti di elenchi a memoria.
+- **Set istruzioni autoritativo**: `Parser.SetCode` (**36 opcode** — vedi Appendice A di `GUIDA-SVILUPPO.md`; il piano originale diceva 35 per errore). Non fidarti di elenchi a memoria.
 - **Breakpoint**: nuovo `HashSet<int> Breakpoints` su indici istruzione; il vecchio `Trap`/`SetTrap`/`rigaTrap`/`Instruction.Trap` va rimosso. `CpuTrapException`/`CpuLoopException` restano.
 - **Cross-platform**: `Ambiente.cs` ha path con `\\` hardcoded e `using System.Drawing` residuo; `Storage.cs` idem (`System.Drawing`). Vanno corretti (Fase 1).
 - **`Ambiente`**: campi `static` pubblici senza notifiche, **e il core li legge staticamente**. Si gestisce in MVVM con un `SettingsViewModel` singleton osservabile con write-through su `Ambiente` (Fase 6); `Ambiente` resta come store di persistenza. Non rendere `Ambiente` non-statico in questa fase.
@@ -154,15 +154,30 @@ I dettagli completi (passi puntuali, problemi noti) sono in `GUIDA-SVILUPPO.md`:
   7. Dock.Avalonia ricrea la View su hide/show: testo va salvato in `SourceText` del ViewModel e ripristinato in `OnDataContextChanged`.
   8. Pannello dati: `Compile()` legge `_factory.DataEditor.SourceText` direttamente, non più via split `.DATA` sul codice.
 
-### Fase 4 — Syntax highlighting
+### Fase 4 — Syntax highlighting ✅ COMPLETATA (2026-06-29)
 - **Tocca**: nuovo `.xshd` (EmbeddedResource) + caricamento nell'editor.
-- **DoD**: tutti i 35 opcode di `Parser.SetCode`, registri, indiretti `[bx]/[bp]/[si]/[di]`, commenti `//`, char `'…'`, etichette `:`, hex con suffisso `h`, marcatore `.DATA`.
-- **Gate**: nessun opcode non colorato (confronto con Appendice A).
+- **DoD**: tutti e 36 gli opcode di `Parser.SetCode` (la guida diceva 35, ma il sorgente ne ha 36), registri, indiretti `[bx]/[bp]/[si]/[di]`, commenti `//`, char `'…'`, etichette `:`, hex con suffisso `h`, marcatore `.DATA`.
+- **Gate**: build 0 errori; tutti gli opcode colorati.
+- **Assunzioni registrate** (dettagli in `GUIDA-SVILUPPO.md` §Fase 4 → "Assunzioni e decisioni"):
+  1. `Parser.SetCode` contiene **36** opcode, non 35 come indicato nella guida (aggiornare Appendice A).
+  2. L'`.xshd` è registrato in `App.OnFrameworkInitializationCompleted()` via `HighlightingManager.Instance.RegisterHighlighting` e recuperato nelle view con `GetDefinition("EasyCPU")`.
+  3. La registrazione usa `new XmlTextReader(stream)`, non `XmlReader.Create()`, per compatibilità con AvaloniaEdit 12.
+  4. Il nome risorsa embedded è `EasyCPU.vNext.Resources.EasyCPU.xshd` (RootNamespace `EasyCPU.vNext` + cartella `Resources`).
+  5. Lo stesso `.xshd` è applicato anche a `DataEditorView` (colora numeri, hex ed etichette nella sezione dati).
+  6. Colori pensati per tema Light (default); su tema Dark rimangono leggibili ma non ottimali — miglioramento estetico rimandato a scelta futura.
 
 ### Fase 5 — Pannelli (contenuto)
-- **Tocca**: `RegistersView/MemoryView/StackView/ErrorsView` + `RefreshDebugViews()` nel MainViewModel.
-- **DoD**: dump reattivi a ogni step; riusa `Cpu.DumpRegs`/`DumpMemoria`; doppio click errore → riga.
-- **Gate**: confronto a vista con `EasyCpu.Win` sullo stesso sorgente.
+- **Tocca**: `RegistersView/MemoryView/StackView/ErrorsView` (XAML + code-behind) + `RegistersViewModel/MemoryViewModel/StackViewModel/ErrorsViewModel` (già stub) + `MainViewModel` (aggiungere `RefreshDebugViews()` + popolare errori in `Compile()`).
+- **DoD**: dump reattivi a ogni step; riusa `Cpu.DumpRegs()`/`DumpMemoria()`; errori di compilazione in `ErrorsView`; doppio click errore → riga nell'editor.
+- **Gate**: confronto a vista con `EasyCpu.Win` sullo stesso sorgente; build 0 errori.
+- **Prerequisiti verificati** (stato stub al 2026-06-29):
+  - `RegistersViewModel`, `MemoryViewModel`, `StackViewModel`: hanno `[ObservableProperty] string _dump`.
+  - `ErrorsViewModel`: ha `ObservableCollection<CompilerError> Errors`.
+  - Le 4 View sono `TextBlock` placeholder — vanno sostituite.
+  - `MainViewModel` ha già `Cpu`, `Compiler`, `_factory` e i commenti `// TODO Fase 5` nei punti esatti.
+  - `_factory.Registers/Memory/Stack/Errors` sono già esposti da `DockFactory`.
+- **API core pronte**: `Cpu.DumpRegs()` → `string[9]`; `Cpu.DumpMemoria(da, a, colonne)` → `List<string>?` (null-safe!); `Ram.INDIRIZZO_STACK=240`, `Ram.MASSIMO_INDIRIZZO=255`; `Ambiente.ColonneStack`; `CompilerError.{Riga,Colonna,Msg,Tipo}` con `Riga` **0-based**.
+- **Attenzione**: `Cpu.flags` è private — usare `Cpu.FlagZero/FlagSegno/FlagOverflow` (bool, già pubbliche). Dettagli completi in `GUIDA-SVILUPPO.md` §Fase 5.
 
 ### Fase 6 — Dialog, opzioni (MVVM), formato file
 - **Tocca**: `SettingsViewModel` (singleton, creato in Fase 2) + `OpzioniWindow`, `SospendiWindow`, integrazione `IStorageProvider`, astrazione `ISourceSerializer` con `EasyFileSerializer` (nuovo, default) e `LegacyAsSerializer` (sola lettura) in `EasyCpu.Backend`; adeguare `Ambiente.FiltroFileDialog`/`NomeNuovoFile`.

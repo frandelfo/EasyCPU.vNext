@@ -10,6 +10,7 @@ using AvaloniaEdit.Search;
 using EasyCpu.Common;
 using EasyCPU.vNext.ViewModels;
 using EasyCPU.vNext.Views.Editor;
+using AvaloniaEdit.Highlighting;
 using AvaInput = Avalonia.Input;
 
 namespace EasyCPU.vNext.Views;
@@ -40,6 +41,8 @@ public partial class CodeEditorView : UserControl
     private void SetupEditor(CodeEditorViewModel vm)
     {
         if (_editor == null) return;
+
+        _editor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("EasyCPU");
 
         // Breakpoint margin visuale — inserito prima del margine numeri di riga
         var bpMargin = new BreakpointMargin(vm.MainVm);
