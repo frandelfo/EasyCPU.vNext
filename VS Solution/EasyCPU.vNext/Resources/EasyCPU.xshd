@@ -11,7 +11,7 @@
 
   <!-- Opcode per categoria -->
   <Color name="OpcodeMove"  foreground="#1565C0" fontWeight="bold" />  <!-- mov movs         — blu -->
-  <Color name="OpcodeArith" foreground="#E65100" fontWeight="bold" />  <!-- add sub mul div… — arancio -->
+  <Color name="OpcodeArith" foreground="#5D2906" fontWeight="bold" />  <!-- add sub mul div… — marrone scuro -->
   <Color name="OpcodeLogic" foreground="#0F766E" fontWeight="bold" />  <!-- and or xor not… — teal -->
   <Color name="OpcodeCmp"   foreground="#AD1457" fontWeight="bold" />  <!-- cmp              — rosa scuro -->
   <Color name="OpcodeStack" foreground="#4527A0" fontWeight="bold" />  <!-- push pop…        — indaco -->
