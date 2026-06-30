@@ -2,8 +2,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Controls;
@@ -11,7 +15,10 @@ using Dock.Model.Core;
 using EasyCpu.Assembler.Memoria;
 using EasyCpu.Assembler.Parsing;
 using EasyCpu.Assembler.Processore;
+using EasyCpu.Backend.Local;
+using EasyCpu.Backend.Serializers;
 using EasyCpu.Common;
+using EasyCPU.vNext.Views;
 
 namespace EasyCPU.vNext.ViewModels;
 
@@ -19,6 +26,8 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly DockFactory _factory;
     private bool _atBreakpoint;
+    private string? _currentFilePath;
+    private bool _isLegacyFile;
 
     public Cpu Cpu { get; } = new();
     public Compiler Compiler { get; } = new();
@@ -48,14 +57,12 @@ public partial class MainViewModel : ObservableObject
 
     // ── Breakpoint helpers ────────────────────────────────────────────────────
 
-    // Called by BreakpointMargin (click) and ToggleBreakpoint command (F9).
     public void ToggleBreakpointLine(int lineNumber)
     {
         if (Breakpoints.Contains(lineNumber))
             Breakpoints.Remove(lineNumber);
         else
             Breakpoints.Add(lineNumber);
-        // CollectionChanged fires → SyncBreakpointsToCpu
     }
 
     private void SyncBreakpointsToCpu()
@@ -64,7 +71,7 @@ public partial class MainViewModel : ObservableObject
         if (Compiler.LineToInstrMap == null) return;
         foreach (int lineNumber in Breakpoints)
         {
-            int idx = lineNumber - 1; // AvaloniaEdit 1-based → compiler 0-based
+            int idx = lineNumber - 1;
             if (idx >= 0 && idx < Compiler.LineToInstrMap.Length)
             {
                 int instrIdx = Compiler.LineToInstrMap[idx];
@@ -83,7 +90,7 @@ public partial class MainViewModel : ObservableObject
         }
         int ip = Cpu.IP;
         if (ip >= 0 && ip < Compiler.InstrToLineMap.Count)
-            CurrentSourceLine = Compiler.InstrToLineMap[ip] + 1; // 0-based → 1-based
+            CurrentSourceLine = Compiler.InstrToLineMap[ip] + 1;
         else
             CurrentSourceLine = -1;
     }
@@ -168,10 +175,125 @@ public partial class MainViewModel : ObservableObject
 
     // ── File ─────────────────────────────────────────────────────────────────
 
-    [RelayCommand] private void New() { }
-    [RelayCommand] private void Open() { }
-    [RelayCommand] private void Save() { }
-    [RelayCommand] private void SaveAs() { }
+    private Window? GetOwnerWindow() =>
+        (Avalonia.Application.Current?.ApplicationLifetime
+            as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
+    private static void SetEditorText(CodeEditorViewModel? vm, string text)
+    {
+        if (vm is null) return;
+        vm.SourceText = text;
+        vm.SetSourceTextAction?.Invoke(text);
+    }
+
+    private static void SetEditorText(DataEditorViewModel? vm, string text)
+    {
+        if (vm is null) return;
+        vm.SourceText = text;
+        vm.SetSourceTextAction?.Invoke(text);
+    }
+
+    [RelayCommand]
+    private void New()
+    {
+        SetEditorText(_factory.CodeEditor, "");
+        SetEditorText(_factory.DataEditor, "");
+        _currentFilePath = null;
+        _isLegacyFile = false;
+        StatusMessage = "Nuovo file";
+    }
+
+    [RelayCommand]
+    private async Task Open()
+    {
+        var owner = GetOwnerWindow();
+        if (owner is null) return;
+
+        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Apri",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("Easy CPU (*.asj; *.as)") { Patterns = ["*.asj", "*.as"] },
+                new FilePickerFileType("Tutti i file")           { Patterns = ["*.*"] }
+            }
+        });
+        if (files.Count == 0) return;
+
+        var path = files[0].Path.LocalPath;
+        try
+        {
+            var ser = ISourceSerializer.ForPath(path);
+            var (code, data) = ser.Load(path);
+            SetEditorText(_factory.CodeEditor, string.Join("\n", code));
+            SetEditorText(_factory.DataEditor, string.Join("\n", data));
+            _currentFilePath = path;
+            _isLegacyFile = !path.EndsWith(".asj", StringComparison.OrdinalIgnoreCase);
+            StatusMessage = $"Aperto: {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore apertura: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task Save()
+    {
+        if (_currentFilePath is null || _isLegacyFile)
+            await SaveToPickedPath();
+        else
+            SaveToPath(_currentFilePath);
+    }
+
+    [RelayCommand]
+    private async Task SaveAs() => await SaveToPickedPath();
+
+    private async Task SaveToPickedPath()
+    {
+        var owner = GetOwnerWindow();
+        if (owner is null) return;
+
+        var suggested = _currentFilePath is not null
+            ? Path.GetFileNameWithoutExtension(_currentFilePath)
+            : "file1";
+
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Salva come",
+            DefaultExtension = ".asj",
+            SuggestedFileName = suggested,
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("Easy CPU JSON (*.asj)") { Patterns = ["*.asj"] }
+            }
+        });
+        if (file is null) return;
+
+        var path = file.Path.LocalPath;
+        SaveToPath(path);
+        _currentFilePath = path;
+        _isLegacyFile = false;
+    }
+
+    private void SaveToPath(string path)
+    {
+        try
+        {
+            var code = (_factory.CodeEditor?.SourceText ?? "")
+                .Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+            var data = (_factory.DataEditor?.SourceText ?? "")
+                .Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+            new EasyFileSerializer().Save(path, code, data);
+            StatusMessage = $"Salvato: {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore salvataggio: {ex.Message}";
+        }
+    }
+
     [RelayCommand] private void Print() { }
 
     [RelayCommand]
@@ -193,8 +315,6 @@ public partial class MainViewModel : ObservableObject
 
     // ── Esegui ───────────────────────────────────────────────────────────────
 
-    // Compila codice e dati. Se ci sono errori li mostra nel pannello Errori e
-    // ritorna false. Se ok inizializza la CPU e ritorna true.
     private bool DoCompile()
     {
         var codeEditor = _factory.CodeEditor;
@@ -255,12 +375,10 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void Run()
+    private async Task Run()
     {
         if (_atBreakpoint)
         {
-            // Riprendi dopo un breakpoint: avanza di un'istruzione (StepInto non controlla
-            // breakpoint), poi continua l'esecuzione normale.
             _atBreakpoint = false;
             try { Cpu.StepInto(); }
             catch (CpuException) { UpdateCurrentSourceLine(); RefreshDebugViews(); return; }
@@ -277,21 +395,35 @@ public partial class MainViewModel : ObservableObject
             if (!DoCompile()) return;
         }
 
-        bool loop = false;
-        try
+        var owner = GetOwnerWindow();
+        while (true)
         {
-            Cpu.Run();
+            try
+            {
+                Cpu.Run();
+                break;
+            }
+            catch (CpuTrapException) { _atBreakpoint = true; break; }
+            catch (CpuLoopException)
+            {
+                var modo = owner is not null
+                    ? await new SospendiWindow().ShowDialog<ModoSospendi>(owner)
+                    : ModoSospendi.Arresta;
+                if (modo == ModoSospendi.Continua) continue;
+                if (modo == ModoSospendi.Pausa) { _atBreakpoint = true; break; }
+                Cpu.Stop();
+                break;
+            }
+            catch (CpuException) { break; }
         }
-        catch (CpuTrapException) { _atBreakpoint = true; }
-        catch (CpuLoopException) { Cpu.Stop(); loop = true; } // TODO Fase 6: SospendiWindow
-        catch (CpuException) { }
+
         UpdateCurrentSourceLine();
         RefreshDebugViews();
-        if (loop)
-            StatusMessage = "Ciclo infinito rilevato — esecuzione sospesa";
-        else if (_atBreakpoint)
-            StatusMessage = CurrentSourceLine > 0 ? $"Breakpoint — riga {CurrentSourceLine}" : "Breakpoint raggiunto";
-        else
+        if (_atBreakpoint)
+            StatusMessage = CurrentSourceLine > 0
+                ? $"Breakpoint — riga {CurrentSourceLine}"
+                : "Breakpoint raggiunto";
+        else if (Cpu.stop)
             StatusMessage = "Esecuzione terminata";
     }
 
@@ -383,7 +515,22 @@ public partial class MainViewModel : ObservableObject
 
     // ── Strumenti ────────────────────────────────────────────────────────────
 
-    [RelayCommand] private void ShowOptions() { }
+    [RelayCommand]
+    private async Task ShowOptions()
+    {
+        var owner = GetOwnerWindow();
+        if (owner is null) return;
+        var vm = new OpzioniViewModel(Settings);
+        var dialog = new OpzioniWindow { DataContext = vm };
+        var ok = await dialog.ShowDialog<bool>(owner);
+        if (ok)
+        {
+            vm.ApplyTo(Settings);
+            Storage.SalvaOpzioni();
+            RefreshDebugViews();
+        }
+    }
+
     [RelayCommand] private void SetThemeLight() => Settings.Theme = AppTheme.Light;
     [RelayCommand] private void SetThemeDark()  => Settings.Theme = AppTheme.Dark;
     [RelayCommand] private void SetThemeBlue()  => Settings.Theme = AppTheme.Blue;
@@ -408,7 +555,7 @@ public partial class MainViewModel : ObservableObject
 
     public void NavigateToError(CompilerError err)
     {
-        int lineNumber = err.Riga + 1; // 0-based → 1-based
+        int lineNumber = err.Riga + 1;
         if (err.Tipo == CompilerError.CODICE)
         {
             if (_factory.CodeEditor is not { } editor) return;

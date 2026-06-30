@@ -76,6 +76,7 @@ namespace EasyCpu.Backend.Local
             sw.WriteLine(string.Format("{0} = {1}", Ambiente.CHIAVE_FONTEDITOR_ZOOM, Ambiente.EditorZoomFactor));
             sw.WriteLine(string.Format("{0} = {1}", Ambiente.CHIAVE_PIENOSCHERMO, Ambiente.PienoSchermo));
             sw.WriteLine(string.Format("{0} = {1}", Ambiente.CHIAVE_VERSIONE, Ambiente.VersioneAssembly));
+            sw.WriteLine(string.Format("{0} = {1}", Ambiente.CHIAVE_FONTPANNELLISIZE, Ambiente.FontPanelliSize));
             sw.WriteLine(string.Format("{0} = {1}", Ambiente.CHIAVE_MARGINESINISTRO, Ambiente.MargineSinistro));
             sw.Close();
         }
@@ -154,6 +155,10 @@ namespace EasyCpu.Backend.Local
             valore = (string)sl[Ambiente.CHIAVE_VERSIONE];
             if (valore != null)
                 Ambiente.VersioneAssembly = valore;
+
+            valore = (string)sl[Ambiente.CHIAVE_FONTPANNELLISIZE];
+            if (valore != null)
+                StrToFloat(valore, ref Ambiente.FontPanelliSize);
         }
 
         static void StrToInt(string s, ref int valore)

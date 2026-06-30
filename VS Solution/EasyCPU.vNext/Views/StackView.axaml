@@ -4,7 +4,7 @@
              x:Class="EasyCPU.vNext.Views.StackView"
              x:DataType="vm:StackViewModel">
     <ScrollViewer>
-        <TextBlock Text="{Binding Dump}" FontFamily="Courier New,Monospace" FontSize="12"
+        <TextBlock x:Name="DumpText" Text="{Binding Dump}" FontFamily="Courier New,Monospace"
                    Margin="4" TextWrapping="NoWrap" />
     </ScrollViewer>
 </UserControl>

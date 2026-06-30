@@ -21,6 +21,7 @@ public partial class CodeEditorViewModel : Document
     internal Action? PasteAction;
     internal Action? SelectAllAction;
     internal Action? FindAction;
+    internal Action<string>? SetSourceTextAction;
     internal Action<int>? NavigateToLineAction;
 
     public CodeEditorViewModel(MainViewModel mainVm)

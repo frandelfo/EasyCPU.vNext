@@ -10,6 +10,7 @@ using AvaloniaEdit.Search;
 using EasyCpu.Common;
 using EasyCPU.vNext.ViewModels;
 using EasyCPU.vNext.Views.Editor;
+using Avalonia.Media;
 using AvaloniaEdit.Highlighting;
 using AvaInput = Avalonia.Input;
 
@@ -43,6 +44,17 @@ public partial class CodeEditorView : UserControl
         if (_editor == null) return;
 
         _editor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("EasyCPU");
+
+        // Font: applica subito e aggiorna quando l'utente cambia le opzioni
+        var settings = SettingsViewModel.Instance;
+        ApplyFont(_editor, settings);
+        settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SettingsViewModel.FontEditorNome)
+                               or nameof(SettingsViewModel.FontEditorSize)
+                               or nameof(SettingsViewModel.FontEditorStyle))
+                ApplyFont(_editor, settings);
+        };
 
         // Breakpoint margin visuale — inserito prima del margine numeri di riga
         var bpMargin = new BreakpointMargin(vm.MainVm);
@@ -83,6 +95,13 @@ public partial class CodeEditorView : UserControl
         vm.SelectAllAction = () => _editor.TextArea.Selection =
             Selection.Create(_editor.TextArea, 0, _editor.Document.TextLength);
         vm.FindAction      = () => SearchPanel.Install(_editor).Open();
+        vm.SetSourceTextAction = text =>
+        {
+            _editor.Document.Text = text;
+            _editor.TextArea.Caret.Line = 1;
+            _editor.TextArea.Caret.Column = 1;
+        };
+
         vm.NavigateToLineAction = lineNumber =>
         {
             if (_editor.Document.LineCount == 0) return;
@@ -131,6 +150,16 @@ public partial class CodeEditorView : UserControl
         var text = await AvaInput.AsyncDataTransferExtensions.TryGetTextAsync(data);
         if (text != null)
             _editor!.TextArea.Selection.ReplaceSelectionWithText(text);
+    }
+
+    private static void ApplyFont(TextEditor editor, SettingsViewModel s)
+    {
+        if (!string.IsNullOrWhiteSpace(s.FontEditorNome))
+            editor.FontFamily = new FontFamily(s.FontEditorNome);
+        if (s.FontEditorSize > 0)
+            editor.FontSize = s.FontEditorSize;
+        editor.FontWeight = (s.FontEditorStyle & 1) != 0 ? FontWeight.Bold   : FontWeight.Normal;
+        editor.FontStyle  = (s.FontEditorStyle & 2) != 0 ? FontStyle.Italic  : FontStyle.Normal;
     }
 
     private void OnTextEntering(object? sender, TextInputEventArgs e)

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using AvaloniaEdit;
+using Avalonia.Media;
 using AvaloniaEdit.Highlighting;
 using EasyCpu.Common;
 using EasyCPU.vNext.ViewModels;
@@ -39,6 +40,16 @@ public partial class DataEditorView : UserControl
 
         _editor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("EasyCPU");
 
+        var settings = SettingsViewModel.Instance;
+        ApplyFont(_editor, settings);
+        settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SettingsViewModel.FontEditorNome)
+                               or nameof(SettingsViewModel.FontEditorSize)
+                               or nameof(SettingsViewModel.FontEditorStyle))
+                ApplyFont(_editor, settings);
+        };
+
         if (!string.IsNullOrEmpty(vm.SourceText))
             _editor.Document.Text = vm.SourceText;
 
@@ -46,6 +57,13 @@ public partial class DataEditorView : UserControl
             vm.SourceText = _editor.Document.Text;
 
         _editor.TextArea.TextEntering += OnTextEntering;
+
+        vm.SetSourceTextAction = text =>
+        {
+            _editor.Document.Text = text;
+            _editor.TextArea.Caret.Line = 1;
+            _editor.TextArea.Caret.Column = 1;
+        };
 
         vm.NavigateToLineAction = lineNumber =>
         {
@@ -59,6 +77,16 @@ public partial class DataEditorView : UserControl
             _editor.TextArea.Caret.Column = leading < text.Length ? leading + 1 : 1;
             Avalonia.Threading.Dispatcher.UIThread.Post(() => _editor.TextArea.Focus());
         };
+    }
+
+    private static void ApplyFont(TextEditor editor, SettingsViewModel s)
+    {
+        if (!string.IsNullOrWhiteSpace(s.FontEditorNome))
+            editor.FontFamily = new FontFamily(s.FontEditorNome);
+        if (s.FontEditorSize > 0)
+            editor.FontSize = s.FontEditorSize;
+        editor.FontWeight = (s.FontEditorStyle & 1) != 0 ? FontWeight.Bold  : FontWeight.Normal;
+        editor.FontStyle  = (s.FontEditorStyle & 2) != 0 ? FontStyle.Italic : FontStyle.Normal;
     }
 
     private void OnTextEntering(object? sender, TextInputEventArgs e)

@@ -182,14 +182,21 @@ I dettagli completi (passi puntuali, problemi noti) sono in `GUIDA-SVILUPPO.md`:
   8. **Barra di stato**: `[ObservableProperty] private string _statusMessage` in `MainViewModel`. UI: `Border DockPanel.Dock="Bottom"` con `TextBlock` in **entrambi** `MainWindow.xaml` (desktop) e `MainView.axaml` (single-view), **prima** del `DockControl` (ordine obbligatorio in `DockPanel`). Messaggi in: `DoCompile`, `Run`, `StepInto/Over/Out`, `Stop`.
   9. **"Avvia" riprende da breakpoint**: se `_atBreakpoint`, il comando `Run` chiama `Cpu.StepInto()` (avanza senza controllare breakpoint) poi `Cpu.Run()` (se non ancora `stop`). Evita il ri-trap immediato sullo stesso IP. Se la CPU termina durante lo step si aggiornano le viste senza chiamare `Run()`.
 
-### Fase 6 — Dialog, opzioni (MVVM), formato file
-- **Tocca**: `SettingsViewModel` (singleton, creato in Fase 2) + `OpzioniWindow`, `SospendiWindow`, integrazione `IStorageProvider`, astrazione `ISourceSerializer` con `EasyFileSerializer` (nuovo, default) e `LegacyAsSerializer` (sola lettura) in `EasyCpu.Backend`; adeguare `Ambiente.FiltroFileDialog`/`NomeNuovoFile`.
+### Fase 6 — Dialog, opzioni (MVVM), formato file ✅ COMPLETATA (2026-06-30)
+- **Tocca**: `SettingsViewModel` (singleton) + `OpzioniWindow`, `SospendiWindow`, `ISourceSerializer`/`EasyFileSerializer`/`LegacyAsSerializer` in `EasyCpu.Backend/Serializers/`; `ModoSospendi` enum; `MainWindowViewModel` (New/Open/Save/SaveAs/Run/ShowOptions); `Ambiente.FontPanelliSize`; pannelli di output per font reattivo.
 - **DoD**:
-  - `SettingsViewModel` osservabile come sorgente unica delle opzioni, con write-through su `Ambiente.*` (il core legge `Ambiente` staticamente); `OpzioniWindow` edita una **copia** con OK/Annulla; su OK applica + `Storage.SalvaOpzioni()` + refresh pannelli.
-  - Salvataggio sempre nel **nuovo formato**; apertura con autodetect di `.asj` (nuovo) e `.as` (legacy); salvare un legacy aperto propone il nuovo formato senza sovrascrivere l'originale.
-  - Apri/Salva con `IStorageProvider`; loop infinito → `SospendiWindow`.
-- **Gate**: cambio `FormatoDati` OK/Annulla ok e persistito (anche dopo riavvio); salva nuovo formato + apri legacy ok; round-trip senza perdite.
-- **Attenzione**: niente binding diretto su `Ambiente` (campi statici); non rendere `Ambiente` non-statico ora. WASM: file sandboxed, recenti-per-path non validi → fallback.
+  - `SettingsViewModel` con write-through completo su `Ambiente.*` via `partial void OnXxxChanged`; `OpzioniWindow` edita copia (`OpzioniViewModel`) con OK/Annulla; su OK → `ApplyTo(Settings)` + `Storage.SalvaOpzioni()` + `RefreshDebugViews()`.
+  - Salvataggio sempre nel **nuovo formato** (`.asj`, JSON); apertura con autodetect di `.asj` (nuovo) e `.as` (legacy, sola lettura); aprendo un `.as` e salvando propone il nuovo formato.
+  - Apri/Salva con `IStorageProvider`; loop infinito → `SospendiWindow`; `Run()` async con switch su `ModoSospendi`.
+- **Gate**: cambio `FormatoDati` OK/Annulla ok e persistito; salva `.asj` + apri `.as` legacy ok; round-trip senza perdite; font editor/pannelli aggiornati live. VERDE ✅
+- **Assunzioni registrate**:
+  1. `GetOwnerWindow()` via `IClassicDesktopStyleApplicationLifetime.MainWindow` — `NativeMenuItem` non supporta `CommandParameter`, quindi i comandi file/opzioni non possono ricevere la Window come parametro. Soluzione: i comandi leggono la MainWindow direttamente dal lifecycle. Funzionalmente equivalente.
+  2. `x:CompileBindings="False"` su `OpzioniWindow` — `NumericUpDown.Value` è `decimal?` mentre le proprietà sono `int`/`float`; i compiled binding Avalonia non supportano la coercizione numerica. Il binding riflessivo la gestisce automaticamente.
+  3. `ModoSospendi.Arresta = 0` (primo nell'enum) — così `default(ModoSospendi)` corrisponde ad Arresta quando la finestra viene chiusa tramite il pulsante X senza selezionare un'opzione esplicita.
+  4. `SetSourceTextAction` callback in `CodeEditorViewModel`/`DataEditorViewModel` — `AvaloniaEdit.TextEditor.Document.Text` non è bindabile da ViewModel; la view espone un `Action<string>?` wired in `SetupEditor()` per permettere a `New()`/`Open()` di aggiornare il testo dell'editor da codice. Aggiornare anche `vm.SourceText` direttamente come fallback quando il pannello non è visibile.
+  5. `SuggestedFileName` senza estensione — il `FilePickerSaveOptions.SuggestedFileName` non deve contenere l'estensione (es. `"file1"`, non `"file1.asj"`): `DefaultExtension = ".asj"` la aggiunge automaticamente. Passare il nome con estensione causa la doppia estensione `file.asj.asj`.
+  6. `Storage.LeggiOpzioni()` prima di `SettingsViewModel.Instance` — l'ordine in `App.OnFrameworkInitializationCompleted()` è critico: `Ambiente.Inizializza()` → `Storage.LeggiOpzioni()` → primo accesso a `SettingsViewModel.Instance` (che legge da `Ambiente.*` nel costruttore).
+  7. Font pannelli (`FontPanelliSize`): nuovo campo `Ambiente.FontPanelliSize` (float, default 12) + `CHIAVE_FONTPANNELLISIZE` in `Storage.SalvaOpzioni()`/`LeggiOpzioni()`. Pannelli `RegistersView`/`StackView`/`MemoryView` (su `TextBlock "DumpText"`) ed `ErrorsView` (su `DataGrid "ErrorsGrid"`) si sottoscrivono a `SettingsViewModel.PropertyChanged` per applicare il font live.
 
 ### Fase 7 — Persistenza
 - **Tocca**: salvataggio/caricamento `layout.json`, file recenti, persistenza breakpoint (sidecar `.as.bkpt` o inline nel formato JSON).

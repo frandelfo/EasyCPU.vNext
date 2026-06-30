@@ -81,6 +81,9 @@ namespace EasyCpu.Common
 		public static float EditorZoomFactor;
 		public static string CHIAVE_FONTEDITOR_ZOOM = "FONT_EDITOR_ZOOM";
 
+		public static float FontPanelliSize;
+		public static string CHIAVE_FONTPANNELLISIZE = "FONT_PANNELLI_SIZE";
+
 		public static string VersioneAssembly;
 		public static string CHIAVE_VERSIONE = "VERSIONE";
 
@@ -107,6 +110,7 @@ namespace EasyCpu.Common
 			FontEditorSize = 14;
 			FontEditorStyle = 0;
 			EditorZoomFactor = 1.0f;
+			FontPanelliSize = 12f;
 			InizializzaRegistri = true;
 			LoopInfinito = 65535;
 			PienoSchermo = false;

@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Xml;
+using EasyCpu.Backend.Local;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -25,6 +26,7 @@ public class App : Application
     {
         RegisterEasyCpuHighlighting();
         Ambiente.Inizializza();
+        Storage.LeggiOpzioni();
         ApplyTheme(SettingsViewModel.Instance.Theme);
         var mainViewModel = new MainViewModel(SettingsViewModel.Instance);
 

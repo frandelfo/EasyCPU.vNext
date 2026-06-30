@@ -722,17 +722,19 @@ Esporre `MainVm` su `ErrorsViewModel` con lo stesso pattern di `CodeEditorViewMo
 
 ---
 
-## FASE 6 — Dialog e gestione file
+## FASE 6 — Dialog e gestione file ✅ COMPLETATA (2026-06-30)
 
 **Obiettivo:** Opzioni, finestra loop infinito, apri/salva cross-platform.
 
-### Passi
+### Cosa è stato implementato
 
-- **`SettingsViewModel` (sorgente osservabile delle opzioni, singleton)**: ViewModel che espone come proprietà osservabili le opzioni configurabili, con write-through su `Ambiente.*`. Tutta la UI fa binding su questo, non su `Ambiente`. **Obbligatorio**: `Ambiente` è fatto di campi `static` senza notifiche. Vedi sotto "Gestione di `Ambiente` e delle opzioni in MVVM".
-- `OpzioniWindow`: editing OK/Annulla su una **copia** del `SettingsViewModel`, non su `Ambiente`. Campi: `MaxNumErrori`, `FormatoDati`, `ColonneStack`, `InizializzaRegistri`, `LoopInfinito`, `MargineSinistro`, `FormatoCarZero` (chiavi in Appendice B).
-- `SospendiWindow`: 3 pulsanti (Pausa / Continua / Arresta) su `CpuLoopException`.
-- Apri/Salva con `IStorageProvider` (Avalonia 12, cross-platform) al posto di `OpenFileDialog`.
-- **Nuovo formato file come default + apertura del legacy `.as`** (vedi sotto "Formato file").
+- **`SettingsViewModel`** completato con write-through completo su `Ambiente.*` via `partial void OnXxxChanged`. Tutte le proprietà configurabili ora hanno callback; il core legge `Ambiente` staticamente e rimane coerente.
+- **`OpzioniWindow`** + **`OpzioniViewModel`** (copia del singleton per editing isolato). Su OK: `vm.ApplyTo(Settings)` + `Storage.SalvaOpzioni()` + `RefreshDebugViews()`.
+- **`SospendiWindow`** con enum `ModoSospendi { Arresta=0, Pausa, Continua }` e `Run()` async che fa loop su `CpuLoopException`.
+- **`ISourceSerializer`** / **`EasyFileSerializer`** (JSON `.asj`, default) / **`LegacyAsSerializer`** (sola lettura) in `EasyCpu.Backend/Serializers/`.
+- **Apri/Salva** con `IStorageProvider` (cross-platform). `DefaultExtension = ".asj"` sul dialog di salvataggio.
+- **`FontPanelliSize`**: nuovo campo `Ambiente.FontPanelliSize` (float, default 12) persisto in `Storage`; font applicato live a `RegistersView`, `StackView`, `MemoryView` (TextBlock `"DumpText"`) ed `ErrorsView` (DataGrid `"ErrorsGrid"`) via sottoscrizione a `SettingsViewModel.PropertyChanged`.
+- **`SetSourceTextAction`**: callback `Action<string>?` in `CodeEditorViewModel`/`DataEditorViewModel`, wired in `SetupEditor()`, usata da `New()`/`Open()` per aggiornare il contenuto dell'editor direttamente (AvaloniaEdit non espone `Document.Text` come proprietà bindabile).
 
 ### Gestione di `Ambiente` e delle opzioni in MVVM
 
@@ -740,72 +742,60 @@ Esporre `MainVm` su `ErrorsViewModel` con lo stesso pattern di `CodeEditorViewMo
 
 **`SettingsViewModel` — sorgente osservabile unica delle opzioni (singleton).**
 
-1. `SettingsViewModel : ObservableObject` (classe `partial`, CommunityToolkit) con una proprietà `[ObservableProperty]` per ogni opzione configurabile (vedi Appendice B): `FormatoDati`, `FormatoCarZero`, `MaxNumErrori`, `ColonneStack`, `InizializzaRegistri`, `LoopInfinito`, `MargineSinistro`, `MostraMemoria`, font/zoom, `PienoSchermo`.
-2. È un **singleton** creato all'avvio (Fase 2, composizione dell'app) e iniettato in `MainViewModel` e nei pannelli che ne dipendono. Tutta la UI fa binding su questo VM, **non** su `Ambiente`.
-3. **Caricamento**: all'avvio `Storage.LeggiOpzioni()` popola `Ambiente`, poi `SettingsViewModel` si inizializza da `Ambiente.*`.
-4. **Write-through verso il core**: ogni proprietà implementa il write-through nella callback parziale generata da CommunityToolkit (`partial void OnFormatoDatiChanged(FormatoValore value) => Ambiente.FormatoDati = value;`), così il core, che legge `Ambiente` staticamente, resta coerente. In particolare `FormatoDati` deve propagare a `Ambiente.FormatoDati` (che ricalcola `FI/FD/FR`).
-5. **Reattività dei pannelli**: i pannelli che mostrano dati formattati (registri/memoria/stack) si sottoscrivono ai cambi rilevanti via `PropertyChanged` (es. `settings.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(FormatoDati) or nameof(ColonneStack)) RefreshDebugViews(); };`) oppure `MainViewModel` chiama direttamente `RefreshDebugViews()` a ogni step/run.
-6. **Persistenza**: `SettingsViewModel.Salva()` → `Storage.SalvaOpzioni()`.
+1. `SettingsViewModel : ObservableObject` (classe `partial`, CommunityToolkit) con una proprietà `[ObservableProperty]` per ogni opzione: `FormatoDati`, `FormatoCarZero`, `MaxNumErrori`, `ColonneStack`, `InizializzaRegistri`, `LoopInfinito`, `MargineSinistro`, `MostraMemoria`, `PienoSchermo`, `FontEditorNome`, `FontEditorSize` (float), `FontEditorStyle` (int), `FontPanelliSize` (float), `Theme`.
+2. È un **singleton** (`SettingsViewModel.Instance`), primo accesso in `App.OnFrameworkInitializationCompleted()` dopo `Ambiente.Inizializza()` e `Storage.LeggiOpzioni()`. Tutta la UI fa binding su questo VM, **non** su `Ambiente`.
+3. **Caricamento**: ordine critico — `Ambiente.Inizializza()` → `Storage.LeggiOpzioni()` → primo accesso a `SettingsViewModel.Instance` (che legge da `Ambiente.*` nel costruttore privato).
+4. **Write-through verso il core**: ogni proprietà implementa il write-through nella callback parziale (`partial void OnFormatoDatiChanged(FormatoValore value) => Ambiente.FormatoDati = value;`). Il parametro della callback **deve chiamarsi `value`** (non `v` o altro) per evitare CS8826 con il source generator di CommunityToolkit.
+5. **Reattività dei pannelli**: `RefreshDebugViews()` su `MainViewModel` è chiamata da ogni comando (step/run/stop/compile). I pannelli di output (`RegistersView` ecc.) si sottoscrivono a `PropertyChanged` per il font.
+6. **Persistenza**: `Storage.SalvaOpzioni()` chiamata esplicitamente da `ShowOptions()` su OK.
 
 **`OpzioniWindow` — editing con pattern OK/Annulla.**
 
-7. La finestra opzioni **non** modifica direttamente il singleton: lavora su una **copia** (clona i valori in un `OptionsEditViewModel`, o usa un meccanismo di snapshot/rollback).
-8. Su **OK**: applica i valori al `SettingsViewModel` singleton (che fa write-through su `Ambiente`) e chiama `Salva()`.
-9. Su **Annulla**: scarta la copia, nessun effetto.
+7. La finestra opzioni lavora su **`OpzioniViewModel`** (copia snapshot del `SettingsViewModel`), non sul singleton.
+8. Su **OK** (`ShowDialog<bool?>` ritorna `true`): `vm.ApplyTo(Settings)` → write-through automatico su `Ambiente.*` → `Storage.SalvaOpzioni()` → `RefreshDebugViews()`.
+9. Su **Annulla** o chiusura via X: nessun effetto sul singleton.
+10. **`x:CompileBindings="False"`** su `OpzioniWindow` obbligatorio: `NumericUpDown.Value` è `decimal?` ma le proprietà sono `int`/`float`. I compiled binding Avalonia non gestiscono la coercizione; il binding riflessivo la gestisce automaticamente.
 
-> Nota architetturale: questo mantiene `Ambiente` come **store di persistenza**
-> (DTO statico) e introduce un livello MVVM osservabile sopra di esso. In una
-> fase futura si potrà rendere `Ambiente` non statico iniettando le opzioni nel
-> core (`Cpu`/`Compiler`), ma **non è richiesto ora** (principio di semplicità).
-
-Verifica: cambiare `FormatoDati` da Dec a Hex e premere OK → i dump cambiano subito e l'opzione è persistita; premere Annulla → nessun cambiamento; riavviare l'app → le opzioni sono ripristinate.
+> `Ambiente` resta **store di persistenza** (DTO statico). In una fase futura
+> si potrà iniettare le opzioni nel core come istanza, ma **non è richiesto ora**.
 
 ### Formato file: nuovo formato di default + apertura del legacy
 
-**Decisione presa:** si adotta **direttamente un nuovo formato** come default di
-salvataggio; il vecchio formato testuale `.as` resta **apribile** (sola lettura
-del formato, non più scritto).
+**Decisione presa:** estensione **`.asj`** per il nuovo formato JSON; il vecchio `.as` resta apribile (sola lettura).
 
-Oggi `Storage.Salva`/`Apri` usano un unico formato testuale: righe di codice,
-marcatore `.DATA`, righe dati. Nuovo assetto:
+**`ISourceSerializer`** (interfaccia in `EasyCpu.Backend/Serializers/`):
+```
+(string[] code, string[] data) Load(string path)
+void Save(string path, string[] code, string[] data)
+bool CanWrite
+static ISourceSerializer ForPath(string path)   // factory: .asj → Easy, else → Legacy
+```
 
-1. Definire un'astrazione `ISourceSerializer`:
-   `void Save(string path, SourceDocument doc)` e `SourceDocument Load(string path)`.
-   `SourceDocument` incapsula `Codice` (righe), `Dati` (righe), `Breakpoints` (numeri di riga), e metadati (versione formato, eventualmente cursore).
-2. **`EasyFileSerializer` (nuovo formato, default)**: un unico **JSON** con campo
-   `formatVersion`, `code[]`, `data[]`, `breakpoints[]`. Estensione dedicata
-   **`.asj`** per distinguerlo dal legacy. (L'estensione è una convenzione: se ne
-   preferisci un'altra, è l'unico punto da cambiare.)
-3. **`LegacyAsSerializer` (solo lettura)**: legge il vecchio formato testuale
-   `.as`. **Non** viene usato per salvare: aprendo un `.as` legacy e poi salvando,
-   il file viene scritto nel nuovo formato (con il nuovo nome/estensione,
-   chiedendo conferma all'utente per non sovrascrivere il `.as` originale).
-4. **Autodetect in lettura**: riconoscere il formato dal contenuto/estensione
-   (prima riga non vuota che inizia con `{` → JSON nuovo; altrimenti legacy),
-   così "Apri" gestisce indifferentemente `.asj` e vecchi `.as`.
-5. `Storage` diventa una **facciata**: in scrittura usa sempre
-   `EasyFileSerializer`; in lettura sceglie il serializer via autodetect.
-6. Aggiornare il filtro file dei dialog (`FilePickerFileType`): salvataggio →
-   solo nuovo formato (`*.asj`); apertura → nuovo + legacy (`*.asj;*.as`).
-   Adeguare di conseguenza `Ambiente.FiltroFileDialog`/`NomeNuovoFile`.
+**Autodetect basato sull'estensione** (non sul contenuto): `ForPath()` controlla `EndsWith(".asj")` — semplice e senza lettura anticipata del file.
 
-Verifica: salvare un programma → file nel nuovo formato; riaprirlo → codice,
-dati e breakpoint identici; aprire un vecchio `.as` legacy → si apre
-correttamente; "salva" di un legacy → propone il nuovo formato senza
-sovrascrivere il `.as` di partenza.
+**`EasyFileSerializer`**: JSON `{ "version": 1, "code": [...], "data": [...] }`. `CanWrite = true`.
+
+**`LegacyAsSerializer`**: delega a `Storage.Apri()` (formato testuale legacy). `CanWrite = false`; `Save()` lancia `InvalidOperationException`.
+
+**Comportamento dialogs** (`IStorageProvider`):
+- Apertura: filtro `*.asj` + `*.as` (tutti i file supportati). Autodetect via `ForPath()`.
+- Salvataggio: `DefaultExtension = ".asj"`, `SuggestedFileName` senza estensione (es. `"file1"` non `"file1.asj"`) — il dialog aggiunge l'estensione automaticamente. Se il nome contiene già `.asj`, usare `Path.GetFileNameWithoutExtension()`.
+- Aprire un `.as` legacy imposta `_isLegacyFile = true`: il comando "Salva" reindirizza a "Salva con nome" (non sovrascrive il file legacy originale).
+
+### Assunzioni e decisioni
+
+1. **`GetOwnerWindow()` via lifecycle**: `NativeMenuItem` non supporta `CommandParameter` (AVLN3000), quindi i comandi File/Opzioni non possono ricevere la `Window` come parametro. Si recupera `IClassicDesktopStyleApplicationLifetime.MainWindow` direttamente.
+2. **`ModoSospendi.Arresta = 0`** (primo nell'enum): `default(ModoSospendi)` = Arresta — comportamento sicuro quando il dialog viene chiuso con la X.
+3. **`SetSourceTextAction`** in `CodeEditorViewModel`/`DataEditorViewModel`: `AvaloniaEdit.TextEditor.Document.Text` non è bindabile. La view espone un `Action<string>?` wired in `SetupEditor()`. `New()`/`Open()` chiama sia `vm.SourceText = text` (fallback se la view non è visibile) che `vm.SetSourceTextAction?.Invoke(text)` (aggiornamento diretto dell'editor quando è montato).
+4. **`SuggestedFileName` senza estensione**: passare `"file1.asj"` causerebbe `"file1.asj.asj"` nel dialog (il `DefaultExtension` si aggiunge sempre). Usare `"file1"` o `Path.GetFileNameWithoutExtension(...)`.
 
 ### Verifica
 
-- Cambiare un'opzione e riaprire l'app → opzione persistita (file `.opt`).
-- Provocare un loop infinito (es. `jmp` su sé stesso, default `LoopInfinito=65535`) → compare `SospendiWindow`.
-- Apri/Salva funzionano su desktop **e** (almeno apri) su browser/mobile.
-
-### Problemi probabili
-
-- **`Ambiente` è tutto `static` con campi pubblici (non proprietà, niente `INotifyPropertyChanged`)**: il binding bidirezionale diretto in `OpzioniWindow` **non funziona** come ci si aspetta. Soluzione: un `OptionsViewModel` wrapper con proprietà osservabili che legge/scrive `Ambiente.*` su OK. Da pianificare, non è banale.
-- **Persistenza path**: se non si è corretta `Ambiente` (Fase 1, punto 6), il salvataggio opzioni fallisce o scrive in path Windows su macOS/Linux.
-- **`IStorageProvider` su WASM**: l'accesso ai file nel browser è sandboxed (File System Access API): "salva su disco" funziona diversamente; i **file recenti per path** non hanno senso nel browser. Prevedere un fallback (download/upload, o storage del browser).
-- **Cultura/formattazione numerica**: i dump usano `string.Format` con format string custom; verificare che la cultura non introduca separatori inattesi.
+- Cambiare `FormatoDati` da Dec a Hex → OK: dump cambiano subito, persistiti al riavvio; Annulla: nessun cambio.
+- Provocare un loop infinito (`jmp` su sé stesso) → compare `SospendiWindow`; Continua riprende, Pausa congela, Arresta ferma.
+- Salva → file `.asj` (JSON); riaprilo → codice e dati identici.
+- Apri un vecchio `.as` → si apre; "Salva" propone nome nuovo senza sovrascrivere il legacy.
+- Cambia `FontEditorSize` o `FontPanelliSize` → font aggiornato live nell'editor/pannelli senza riavvio.
 
 ---
 

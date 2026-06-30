@@ -11,9 +11,25 @@ public partial class ErrorsView : UserControl
     public ErrorsView()
     {
         InitializeComponent();
-        this.FindControl<DataGrid>("ErrorsGrid")
-            ?.AddHandler(InputElement.PointerPressedEvent, OnGridPointerPressed,
+        var grid = this.FindControl<DataGrid>("ErrorsGrid");
+        grid?.AddHandler(InputElement.PointerPressedEvent, OnGridPointerPressed,
                          Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+
+        if (grid is not null)
+        {
+            var s = SettingsViewModel.Instance;
+            ApplyFontSize(grid, s.FontPanelliSize);
+            s.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(SettingsViewModel.FontPanelliSize))
+                    ApplyFontSize(grid, s.FontPanelliSize);
+            };
+        }
+    }
+
+    private static void ApplyFontSize(DataGrid grid, float size)
+    {
+        if (size > 0) grid.FontSize = size;
     }
 
     private void InitializeComponent()
