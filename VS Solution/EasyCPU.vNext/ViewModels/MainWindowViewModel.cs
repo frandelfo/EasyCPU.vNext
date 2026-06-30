@@ -218,8 +218,11 @@ public partial class MainViewModel : ObservableObject
         if (ev != null)
         {
             ev.Errors.Clear();
-            foreach (var e in codeErrors ?? []) ev.Errors.Add(new CompilerErrorAdapter(e));
-            foreach (var e in dataErrors ?? []) ev.Errors.Add(new CompilerErrorAdapter(e));
+            var sorted = (codeErrors ?? []).Select(e => new CompilerErrorAdapter(e))
+                .Concat((dataErrors ?? []).Select(e => new CompilerErrorAdapter(e)))
+                .OrderBy(a => a.RigaDisplay)
+                .ThenBy(a => a.TipoDisplay);
+            foreach (var a in sorted) ev.Errors.Add(a);
         }
 
         if (instructions == null || memory == null)
@@ -370,8 +373,16 @@ public partial class MainViewModel : ObservableObject
     {
         int lineNumber = err.Riga + 1; // 0-based → 1-based
         if (err.Tipo == CompilerError.CODICE)
-            _factory.CodeEditor?.NavigateToLineAction?.Invoke(lineNumber);
+        {
+            if (_factory.CodeEditor is not { } editor) return;
+            _factory.SetActiveDockable(editor);
+            editor.NavigateToLineAction?.Invoke(lineNumber);
+        }
         else
-            _factory.DataEditor?.NavigateToLineAction?.Invoke(lineNumber);
+        {
+            if (_factory.DataEditor is not { } editor) return;
+            _factory.SetActiveDockable(editor);
+            editor.NavigateToLineAction?.Invoke(lineNumber);
+        }
     }
 }

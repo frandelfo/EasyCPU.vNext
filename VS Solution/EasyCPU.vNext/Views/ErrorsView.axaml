@@ -3,29 +3,18 @@
              xmlns:vm="clr-namespace:EasyCPU.vNext.ViewModels"
              x:Class="EasyCPU.vNext.Views.ErrorsView"
              x:DataType="vm:ErrorsViewModel">
-    <DockPanel>
-        <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1"
-                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumBrush}">
-            <Grid ColumnDefinitions="60,50,*">
-                <TextBlock Grid.Column="0" Text="Tipo"      FontWeight="SemiBold" Margin="8,4"/>
-                <TextBlock Grid.Column="1" Text="Riga"      FontWeight="SemiBold" Margin="4"/>
-                <TextBlock Grid.Column="2" Text="Messaggio" FontWeight="SemiBold" Margin="4"/>
-            </Grid>
-        </Border>
-        <ListBox ItemsSource="{Binding Errors}" SelectionMode="Single"
-                 DoubleTapped="OnErrorDoubleTapped">
-            <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:CompilerErrorAdapter">
-                    <Grid ColumnDefinitions="60,50,*">
-                        <TextBlock Grid.Column="0" Margin="8,2" TextTrimming="CharacterEllipsis"
-                                   Text="{Binding TipoDisplay}"/>
-                        <TextBlock Grid.Column="1" Margin="4,2"
-                                   Text="{Binding RigaDisplay}"/>
-                        <TextBlock Grid.Column="2" Margin="4,2" TextTrimming="CharacterEllipsis"
-                                   Text="{Binding Msg}"/>
-                    </Grid>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-    </DockPanel>
+    <DataGrid Name="ErrorsGrid"
+              ItemsSource="{Binding Errors}"
+              IsReadOnly="True"
+              CanUserResizeColumns="True"
+              CanUserReorderColumns="False"
+              CanUserSortColumns="False"
+              AutoGenerateColumns="False"
+              SelectionMode="Single">
+        <DataGrid.Columns>
+            <DataGridTextColumn Header="Tipo"      Binding="{Binding TipoDisplay}" Width="70" />
+            <DataGridTextColumn Header="Riga"      Binding="{Binding RigaDisplay}" Width="50" />
+            <DataGridTextColumn Header="Messaggio" Binding="{Binding Msg}"         Width="*"  />
+        </DataGrid.Columns>
+    </DataGrid>
 </UserControl>

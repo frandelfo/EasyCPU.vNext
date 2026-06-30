@@ -88,8 +88,12 @@ public partial class CodeEditorView : UserControl
             if (_editor.Document.LineCount == 0) return;
             int n = Math.Clamp(lineNumber, 1, _editor.Document.LineCount);
             _editor.ScrollTo(n, 1);
+            var docLine = _editor.Document.GetLineByNumber(n);
+            var text    = _editor.Document.GetText(docLine.Offset, docLine.Length);
+            int leading = text.Length - text.TrimStart().Length;
             _editor.TextArea.Caret.Line   = n;
-            _editor.TextArea.Caret.Column = 1;
+            _editor.TextArea.Caret.Column = leading < text.Length ? leading + 1 : 1;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _editor.TextArea.Focus());
         };
     }
 
