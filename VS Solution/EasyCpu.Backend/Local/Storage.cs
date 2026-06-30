@@ -178,23 +178,20 @@ namespace EasyCpu.Backend.Local
 
         public static void SalvaFileRecenti()
         {
-            StreamWriter sw = new StreamWriter(Ambiente.RecentiNomeFile);
-            var recents = Ambiente.FileRecenti.Take(Ambiente.MAXFILERECENTI).ToList();
-            for (int i = 0; i < recents.Count; i++)
-                sw.WriteLine(Ambiente.FileRecenti[i]);
-            sw.Close();
+            using var sw = new StreamWriter(Ambiente.RecentiNomeFile);
+            foreach (var path in Ambiente.FileRecenti.Take(Ambiente.MAXFILERECENTI))
+                sw.WriteLine(path);
         }
 
         public static void ApriFileRecenti()
         {
-            if (!File.Exists(Ambiente.RecentiNomeFile))
-                return;
-            StreamReader sr = new StreamReader(Ambiente.RecentiNomeFile);
+            if (!File.Exists(Ambiente.RecentiNomeFile)) return;
             Ambiente.FileRecenti = new List<string>();
-            string path;
-            while ((path = sr.ReadLine()) != null)
-                Ambiente.FileRecenti.Add(path);
-            sr.Close();
+            using var sr = new StreamReader(Ambiente.RecentiNomeFile);
+            string? path;
+            while ((path = sr.ReadLine()) != null && Ambiente.FileRecenti.Count < Ambiente.MAXFILERECENTI)
+                if (!string.IsNullOrWhiteSpace(path))
+                    Ambiente.FileRecenti.Add(path);
         }
 
         public static bool CreaPathProgetti()

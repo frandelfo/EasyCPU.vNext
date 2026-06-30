@@ -1,21 +1,32 @@
 using System;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using CommunityToolkit.Mvvm.Input;
 using EasyCPU.vNext.ViewModels;
 
 namespace EasyCPU.vNext;
 
 public partial class MainWindow : Window
 {
+    private NativeMenu? _nativeRecentiMenu;
+
     public MainWindow()
     {
         InitializeComponent();
+        Closing += OnWindowClosing;
         if (OperatingSystem.IsMacOS())
         {
             this.FindControl<Menu>("MainMenu")!.IsVisible = false;
             DataContextChanged += OnDataContextChanged;
         }
+    }
+
+    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            vm.SaveAll();
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
@@ -24,6 +35,40 @@ public partial class MainWindow : Window
         {
             vm.PropertyChanged += OnVmPropertyChanged;
             UpdateNativeCheckmarks(vm);
+            SetupNativeRecentiMenu();
+            UpdateNativeRecentiMenu(vm);
+            vm.RecentFileItems.CollectionChanged += (_, _) => UpdateNativeRecentiMenu(vm);
+        }
+    }
+
+    private void SetupNativeRecentiMenu()
+    {
+        if (_nativeRecentiMenu is not null) return;
+        var nativeMenu = NativeMenu.GetMenu(this);
+        if (nativeMenu is null || nativeMenu.Items.Count == 0) return;
+        if (nativeMenu.Items[0] is not NativeMenuItem fileItem) return;
+        var fileMenu = fileItem.Menu;
+        if (fileMenu is null) return;
+
+        _nativeRecentiMenu = new NativeMenu();
+        var recentiItem = new NativeMenuItem { Header = "Recenti", Menu = _nativeRecentiMenu };
+        // Insert: Sep at 4, Recenti at 5 (after Nuovo/Apri/Salva/SalvaAs)
+        fileMenu.Items.Insert(4, new NativeMenuItemSeparator());
+        fileMenu.Items.Insert(5, recentiItem);
+    }
+
+    private void UpdateNativeRecentiMenu(MainViewModel vm)
+    {
+        if (_nativeRecentiMenu is null) return;
+        _nativeRecentiMenu.Items.Clear();
+        foreach (var item in vm.RecentFileItems)
+        {
+            var path = item.Header;
+            _nativeRecentiMenu.Items.Add(new NativeMenuItem
+            {
+                Header = path,
+                Command = new RelayCommand(() => vm.OpenRecentFileCommand.Execute(path))
+            });
         }
     }
 

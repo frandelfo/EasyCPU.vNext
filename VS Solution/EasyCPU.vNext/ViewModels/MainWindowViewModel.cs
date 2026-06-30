@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -12,6 +13,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Controls;
 using Dock.Model.Core;
+using Dock.Model.Mvvm.Controls;
 using EasyCpu.Assembler.Memoria;
 using EasyCpu.Assembler.Parsing;
 using EasyCpu.Assembler.Processore;
@@ -46,6 +48,7 @@ public partial class MainViewModel : ObservableObject
         Settings = settings;
         _factory = new EasyCPU.vNext.DockFactory(this);
         Layout = _factory.CreateLayout();
+        _factory.CurrentLayout = Layout;
         _factory.InitLayout(Layout);
         Settings.PropertyChanged += (_, e) =>
         {
@@ -175,6 +178,14 @@ public partial class MainViewModel : ObservableObject
 
     // ── File ─────────────────────────────────────────────────────────────────
 
+    private static readonly string LayoutFilePath =
+        Path.Combine(Ambiente.EasyCPUPath, "layout.json");
+
+    private static readonly JsonSerializerOptions LayoutJsonOpts = new()
+    {
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals
+    };
+
     private Window? GetOwnerWindow() =>
         (Avalonia.Application.Current?.ApplicationLifetime
             as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
@@ -193,11 +204,35 @@ public partial class MainViewModel : ObservableObject
         vm.SetSourceTextAction?.Invoke(text);
     }
 
+    private void OpenFileFromPath(string path)
+    {
+        try
+        {
+            var ser = ISourceSerializer.ForPath(path);
+            var (code, data) = ser.Load(path);
+            if (_currentFilePath is not null) SaveBreakpoints(_currentFilePath);
+            SetEditorText(_factory.CodeEditor, string.Join("\n", code));
+            SetEditorText(_factory.DataEditor, string.Join("\n", data));
+            _currentFilePath = path;
+            _isLegacyFile = !path.EndsWith(".asj", StringComparison.OrdinalIgnoreCase);
+            Breakpoints.Clear();
+            LoadBreakpoints(path);
+            AddToRecentFiles(path);
+            StatusMessage = $"Aperto: {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore apertura: {ex.Message}";
+        }
+    }
+
     [RelayCommand]
     private void New()
     {
+        if (_currentFilePath is not null) SaveBreakpoints(_currentFilePath);
         SetEditorText(_factory.CodeEditor, "");
         SetEditorText(_factory.DataEditor, "");
+        Breakpoints.Clear();
         _currentFilePath = null;
         _isLegacyFile = false;
         StatusMessage = "Nuovo file";
@@ -220,22 +255,7 @@ public partial class MainViewModel : ObservableObject
             }
         });
         if (files.Count == 0) return;
-
-        var path = files[0].Path.LocalPath;
-        try
-        {
-            var ser = ISourceSerializer.ForPath(path);
-            var (code, data) = ser.Load(path);
-            SetEditorText(_factory.CodeEditor, string.Join("\n", code));
-            SetEditorText(_factory.DataEditor, string.Join("\n", data));
-            _currentFilePath = path;
-            _isLegacyFile = !path.EndsWith(".asj", StringComparison.OrdinalIgnoreCase);
-            StatusMessage = $"Aperto: {Path.GetFileName(path)}";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore apertura: {ex.Message}";
-        }
+        OpenFileFromPath(files[0].Path.LocalPath);
     }
 
     [RelayCommand]
@@ -286,6 +306,8 @@ public partial class MainViewModel : ObservableObject
             var data = (_factory.DataEditor?.SourceText ?? "")
                 .Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
             new EasyFileSerializer().Save(path, code, data);
+            SaveBreakpoints(path);
+            AddToRecentFiles(path);
             StatusMessage = $"Salvato: {Path.GetFileName(path)}";
         }
         catch (Exception ex)
@@ -301,6 +323,122 @@ public partial class MainViewModel : ObservableObject
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             desktop.Shutdown();
+    }
+
+    // ── File recenti ──────────────────────────────────────────────────────────
+
+    public ObservableCollection<RecentFileItem> RecentFileItems { get; } = new();
+
+    private void AddToRecentFiles(string path)
+    {
+        Ambiente.AggiungiRecenti(path);
+        RefreshRecentFileItems();
+    }
+
+    public void RefreshRecentFileItems()
+    {
+        RecentFileItems.Clear();
+        foreach (var path in Ambiente.FileRecenti)
+            RecentFileItems.Add(new RecentFileItem(path, OpenFileFromPath));
+    }
+
+    [RelayCommand]
+    private void OpenRecentFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            StatusMessage = $"File non trovato: {Path.GetFileName(path)}";
+            Ambiente.FileRecenti.Remove(path);
+            RefreshRecentFileItems();
+            return;
+        }
+        OpenFileFromPath(path);
+    }
+
+    // ── Layout persistence ────────────────────────────────────────────────────
+
+    internal void SaveLayout()
+    {
+        try
+        {
+            if (Layout is null) return;
+            Directory.CreateDirectory(Ambiente.EasyCPUPath);
+            var node = _factory.ToDockNode(Layout);
+            File.WriteAllText(LayoutFilePath, JsonSerializer.Serialize(node, LayoutJsonOpts));
+        }
+        catch { }
+    }
+
+    internal void LoadLayout()
+    {
+        try
+        {
+            if (!File.Exists(LayoutFilePath)) return;
+            var node = JsonSerializer.Deserialize<DockNode>(File.ReadAllText(LayoutFilePath), LayoutJsonOpts);
+            if (node is null) return;
+
+            var all = new Dictionary<string, IDockable?>
+            {
+                ["CodeEditor"] = _factory.CodeEditor,
+                ["DataEditor"] = _factory.DataEditor,
+                ["Registers"]  = _factory.Registers,
+                ["Stack"]      = _factory.Stack,
+                ["Memory"]     = _factory.Memory,
+                ["Errors"]     = _factory.Errors,
+            };
+
+            var newLayout = _factory.RebuildLayout(node, all);
+            if (newLayout is null) return;
+            Layout = newLayout;
+            _factory.CurrentLayout = Layout;
+            _factory.InitLayout(Layout);
+        }
+        catch { }
+    }
+
+    // ── Breakpoint persistence ────────────────────────────────────────────────
+
+    private void SaveBreakpoints(string filePath)
+    {
+        try
+        {
+            var bkptFile = filePath + ".bkpt";
+            if (Breakpoints.Count == 0)
+            {
+                if (File.Exists(bkptFile)) File.Delete(bkptFile);
+            }
+            else
+            {
+                File.WriteAllLines(bkptFile, Breakpoints.Select(l => l.ToString()));
+            }
+        }
+        catch { }
+    }
+
+    private void LoadBreakpoints(string filePath)
+    {
+        try
+        {
+            var bkptFile = filePath + ".bkpt";
+            if (!File.Exists(bkptFile)) return;
+            foreach (var line in File.ReadAllLines(bkptFile))
+                if (int.TryParse(line.Trim(), out int lineNum) && lineNum > 0)
+                    Breakpoints.Add(lineNum);
+        }
+        catch { }
+    }
+
+    internal void SaveCurrentBreakpoints()
+    {
+        if (_currentFilePath is not null)
+            SaveBreakpoints(_currentFilePath);
+    }
+
+    internal void SaveAll()
+    {
+        SaveLayout();
+        SaveCurrentBreakpoints();
+        Storage.SalvaFileRecenti();
     }
 
     // ── Modifica ──────────────────────────────────────────────────────────────

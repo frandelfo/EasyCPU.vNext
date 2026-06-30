@@ -94,6 +94,15 @@
                 <MenuItem Header="_Salva"           Command="{Binding SaveCommand}"   InputGesture="Ctrl+S"/>
                 <MenuItem Header="Salva _come..."   Command="{Binding SaveAsCommand}" InputGesture="Ctrl+Shift+S"/>
                 <Separator />
+                <MenuItem Header="_Recenti" ItemsSource="{Binding RecentFileItems}">
+                    <MenuItem.ItemContainerTheme>
+                        <ControlTheme TargetType="MenuItem">
+                            <Setter Property="Header"  Value="{ReflectionBinding Header}"/>
+                            <Setter Property="Command" Value="{ReflectionBinding Command}"/>
+                        </ControlTheme>
+                    </MenuItem.ItemContainerTheme>
+                </MenuItem>
+                <Separator />
                 <MenuItem Header="S_tampa"          Command="{Binding PrintCommand}"  InputGesture="Ctrl+P"/>
                 <Separator />
                 <MenuItem Header="E_sci"            Command="{Binding ExitCommand}"   InputGesture="Alt+F4"/>

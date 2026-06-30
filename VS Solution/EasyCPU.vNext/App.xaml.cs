@@ -17,6 +17,8 @@ namespace EasyCPU.vNext;
 
 public class App : Application
 {
+    private MainViewModel? _mainViewModel;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -27,15 +29,26 @@ public class App : Application
         RegisterEasyCpuHighlighting();
         Ambiente.Inizializza();
         Storage.LeggiOpzioni();
+        Storage.ApriFileRecenti();
         ApplyTheme(SettingsViewModel.Instance.Theme);
-        var mainViewModel = new MainViewModel(SettingsViewModel.Instance);
+        _mainViewModel = new MainViewModel(SettingsViewModel.Instance);
+        _mainViewModel.LoadLayout();
+        _mainViewModel.RefreshRecentFileItems();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow { DataContext = mainViewModel };
+        {
+            desktop.MainWindow = new MainWindow { DataContext = _mainViewModel };
+            desktop.Exit += OnDesktopExit;
+        }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleView)
-            singleView.MainView = new MainView { DataContext = mainViewModel };
+            singleView.MainView = new MainView { DataContext = _mainViewModel };
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
+    {
+        _mainViewModel?.SaveAll();
     }
 
     private static void RegisterEasyCpuHighlighting()

@@ -146,6 +146,8 @@ namespace EasyCpu.Common
 			if (pos != -1)
 				FileRecenti.RemoveAt(pos);
 			FileRecenti.Insert(0, path);
+			while (FileRecenti.Count > MAXFILERECENTI)
+				FileRecenti.RemoveAt(FileRecenti.Count - 1);
 		}
 	}
 }

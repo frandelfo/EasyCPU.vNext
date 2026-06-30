@@ -1,4 +1,6 @@
 #nullable enable
+using System.Collections.Generic;
+using System.Linq;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
@@ -24,9 +26,35 @@ public class DockFactory : Factory
 
     public DockFactory(MainViewModel mainVm) => _mainVm = mainVm;
 
-    // Returns the container that owns the given panel
-    internal IDock? ContainerFor(IDockable? d) =>
-        d == CodeEditor || d == DataEditor ? DocumentContainer : ToolContainer;
+    internal IRootDock? CurrentLayout { get; set; }
+
+    // Returns the container that CURRENTLY holds the panel by walking the full layout tree.
+    // Falls back to the home container when the panel is not visible anywhere.
+    internal IDock? ContainerFor(IDockable? d)
+    {
+        if (d is null) return null;
+        if (CurrentLayout is not null)
+        {
+            var found = FindContainerInTree(CurrentLayout, d);
+            if (found is not null) return found;
+        }
+        return d == CodeEditor || d == DataEditor ? DocumentContainer : ToolContainer;
+    }
+
+    private static IDock? FindContainerInTree(IDock parent, IDockable target)
+    {
+        if (parent.VisibleDockables is null) return null;
+        foreach (var child in parent.VisibleDockables)
+        {
+            if (child == target) return parent;
+            if (child is IDock childDock)
+            {
+                var found = FindContainerInTree(childDock, target);
+                if (found is not null) return found;
+            }
+        }
+        return null;
+    }
 
     // Visibility check: is the panel currently in its container's VisibleDockables?
     internal bool IsPanelVisible(IDockable? d) =>
@@ -40,6 +68,110 @@ public class DockFactory : Factory
         RemoveDockable(dockable, collapse: false);
         _mainVm.OnPanelVisibilityChanged();
     }
+
+    // ── Layout serialization ──────────────────────────────────────────────────
+
+    internal DockNode ToDockNode(IDockable d)
+    {
+        switch (d)
+        {
+            case RootDock root:
+                return new RootNode(
+                    root.ActiveDockable?.Id,
+                    root.VisibleDockables?.Select(ToDockNode).ToArray() ?? []);
+
+            case DocumentDock doc:
+                return new DocNode(doc.Proportion, doc.ActiveDockable?.Id, LeafIds(doc));
+
+            case ToolDock tool:
+                return new ToolNode(tool.Proportion, tool.ActiveDockable?.Id, LeafIds(tool));
+
+            case ProportionalDock prop:
+                return new PropNode(
+                    prop.Orientation == Orientation.Vertical ? "V" : "H",
+                    prop.Proportion,
+                    prop.ActiveDockable?.Id,
+                    prop.VisibleDockables?.Select(ToDockNode).ToArray() ?? []);
+
+            case ProportionalDockSplitter:
+                return new SplitterNode();
+
+            default:
+                return new SplitterNode();
+        }
+    }
+
+    private static string[] LeafIds(IDock dock) =>
+        dock.VisibleDockables?.Where(d => d.Id is not null).Select(d => d.Id!).ToArray() ?? [];
+
+    internal IRootDock? RebuildLayout(DockNode root, Dictionary<string, IDockable?> all)
+    {
+        DocumentContainer = null;
+        ToolContainer     = null;
+        var result = RebuildNode(root, all);
+        return result as IRootDock;
+    }
+
+    private IDockable RebuildNode(DockNode node, Dictionary<string, IDockable?> all)
+    {
+        switch (node)
+        {
+            case RootNode rn:
+            {
+                var rd = CreateRootDock();
+                rd.Id = "Root";
+                rd.VisibleDockables = CreateList<IDockable>(rn.Children.Select(c => RebuildNode(c, all)).ToArray());
+                rd.ActiveDockable   = FindById(rd.VisibleDockables, rn.ActiveId);
+                rd.DefaultDockable  = rd.ActiveDockable ?? rd.VisibleDockables?.FirstOrDefault();
+                return rd;
+            }
+
+            case PropNode pn:
+            {
+                var pd = new ProportionalDock
+                {
+                    Proportion  = pn.Prop,
+                    Orientation = pn.Orient == "V" ? Orientation.Vertical : Orientation.Horizontal,
+                };
+                pd.VisibleDockables = CreateList<IDockable>(pn.Children.Select(c => RebuildNode(c, all)).ToArray());
+                pd.ActiveDockable   = FindById(pd.VisibleDockables, pn.ActiveId);
+                return pd;
+            }
+
+            case DocNode dn:
+            {
+                var dd = new DocumentDock { Proportion = dn.Prop, CanCreateDocument = false };
+                dd.VisibleDockables = CreateList<IDockable>(ResolveIds(dn.Ids, all));
+                dd.ActiveDockable   = FindById(dd.VisibleDockables, dn.ActiveId) ?? dd.VisibleDockables?.FirstOrDefault();
+                DocumentContainer ??= dd;
+                return dd;
+            }
+
+            case ToolNode tn:
+            {
+                var td = new ToolDock { Proportion = tn.Prop };
+                td.VisibleDockables = CreateList<IDockable>(ResolveIds(tn.Ids, all));
+                td.ActiveDockable   = FindById(td.VisibleDockables, tn.ActiveId) ?? td.VisibleDockables?.FirstOrDefault();
+                ToolContainer ??= td;
+                return td;
+            }
+
+            case SplitterNode:
+                return new ProportionalDockSplitter();
+
+            default:
+                return new ProportionalDockSplitter();
+        }
+    }
+
+    private static IDockable[] ResolveIds(string[] ids, Dictionary<string, IDockable?> all) =>
+        ids.Select(id => all.TryGetValue(id, out var p) ? p : null)
+           .Where(p => p is not null).Cast<IDockable>().ToArray();
+
+    private static IDockable? FindById(IList<IDockable>? list, string? id) =>
+        id is null ? null : list?.FirstOrDefault(d => d.Id == id);
+
+    // ── Layout creation ───────────────────────────────────────────────────────
 
     public override IRootDock CreateLayout()
     {

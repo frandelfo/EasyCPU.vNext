@@ -799,40 +799,75 @@ static ISourceSerializer ForPath(string path)   // factory: .asj → Easy, else 
 
 ---
 
-## FASE 7 — Persistenza e file recenti
+## FASE 7 — Persistenza e file recenti ✅ COMPLETATA (2026-06-30)
 
-**Obiettivo:** layout Dock persistente, file recenti, opzioni salvate.
+**Obiettivo:** layout Dock persistente, file recenti, breakpoint persistenti.
 
-### Passi
+### Cosa è stato implementato
 
-- Salvare/caricare `layout.json` in `Environment.GetFolderPath(SpecialFolder.ApplicationData)/EasyCPU/` (con `Path.Combine`).
-- Menu "File recenti" da `Ambiente.FileRecenti` (max `MAXFILERECENTI = 10`).
-- **Persistenza breakpoint** (dettaglio sotto).
+**File recenti:**
+- Corretti `Ambiente.AggiungiRecenti()` (troncamento a `MAXFILERECENTI`), `Storage.SalvaFileRecenti()` (foreach + Take) e `Storage.ApriFileRecenti()` (using + limite + skip righe vuote).
+- Nuovo `ViewModels/RecentFileItem.cs` — wrapper con `Header` (path) e `Command` (RelayCommand con path catturata).
+- `MainViewModel.RecentFileItems` (`ObservableCollection<RecentFileItem>`) + `RefreshRecentFileItems()` + `AddToRecentFiles()`.
+- `[RelayCommand] OpenRecentFile(string path)` con guard `File.Exists`.
+- `MainWindow.xaml`: voce "Recenti" nel menu File in-window con `ItemContainerTheme`/`ReflectionBinding` (obbligatorio per `AvaloniaUseCompiledBindingsByDefault=true`).
+- `MainWindow.xaml.cs`: `SetupNativeRecentiMenu()` + `UpdateNativeRecentiMenu()` per popolare dinamicamente il submenu NativeMenu "Recenti" su macOS; aggiornato automaticamente via `CollectionChanged`.
 
-### Persistenza dei breakpoint
+**Persistenza breakpoint:**
+- `SaveBreakpoints(string filePath)` / `LoadBreakpoints(string filePath)` / `SaveCurrentBreakpoints()` in `MainViewModel`.
+- Sidecar `nomefile.bkpt` adiacente al sorgente; un numero di riga (1-based) per riga.
+- Caricamento tollerante: file assente o righe non numeriche vengono ignorati.
+- Integrati in `OpenFileFromPath()` (save old + load new), `New()` (save + clear), `SaveToPath()` (save).
 
-I breakpoint vivono come numeri di riga in `MainViewModel.Breakpoints`. Due strategie, scegliere in base al formato file:
+**Persistenza layout:**
+- `ViewModels/LayoutState.cs`: gerarchia polimorfica `DockNode` (`RootNode`/`PropNode`/`DocNode`/`ToolNode`/`SplitterNode`) serializzata con `[JsonPolymorphic]`/`[JsonDerivedType]` (discriminatore `"t"`).
+- `DockFactory.ToDockNode(IDockable)`: walker ricorsivo dell'intero albero `IRootDock` — gestisce tutti i nodi compresi quelli creati dinamicamente da Dock quando l'utente sposta pannelli in nuove posizioni.
+- `DockFactory.RebuildLayout(DockNode, Dictionary<string,IDockable?>)`: ricostruisce l'albero Dock da JSON, reinserendo le istanze reali dei ViewModel per ID. Aggiorna `DocumentContainer`/`ToolContainer` al primo `DocumentDock`/`ToolDock` incontrato.
+- `MainViewModel.SaveLayout()` / `LoadLayout()` con `JsonSerializerOptions { NumberHandling = AllowNamedFloatingPointLiterals }` (Dock usa `double.PositiveInfinity` internamente per alcune proporzioni).
+- `MainViewModel.SaveAll()`: metodo centralizzato che chiama `SaveLayout` + `SaveCurrentBreakpoints` + `Storage.SalvaFileRecenti`.
 
-- **Sidecar (default, indipendente dal formato)**: salvare un file accanto al sorgente, `nomefile.as.bkpt`, con un numero di riga per riga. Si salva quando i breakpoint cambiano o alla chiusura del file; si carica all'apertura del sorgente. Vantaggio: non tocca il formato `.as`, funziona anche col formato legacy.
-- **Inline (solo formato JSON)**: se si usa il `JsonAsSerializer` (vedi Fase 6), includere `breakpoints[]` dentro `SourceDocument`. Vantaggio: un solo file; svantaggio: non disponibile col formato legacy.
+**Lifecycle e salvataggio:**
+- `App.xaml.cs`: aggiunto campo `_mainViewModel`; al bootstrap chiama `Storage.ApriFileRecenti()` → `LoadLayout()` → `RefreshRecentFileItems()`; sottoscrive `desktop.Exit += OnDesktopExit` → `SaveAll()`.
+- `MainWindow.xaml.cs`: aggiunto handler `Closing` → `SaveAll()`. **Critico per macOS**: chiudere la finestra con il pulsante rosso non attiva `desktop.Exit` (l'app rimane nel dock), quindi senza `Window.Closing` il salvataggio non avverrebbe mai su macOS.
 
-Regole comuni:
+**Operazioni file integrate con la persistenza:**
+- Nuovo `OpenFileFromPath(string path)` in `MainViewModel`: consolida tutta la logica di apertura — salva breakpoint del file corrente, carica codice/dati, carica breakpoint del nuovo file, aggiunge ai recenti. `Open()` e `OpenRecentFile` lo delegano entrambi.
+- `New()` aggiornato: salva breakpoint del file corrente, azzera breakpoint.
+- `SaveToPath()` aggiornato: salva breakpoint, aggiunge ai recenti.
 
-1. Su WASM (browser) non c'è una path sidecar stabile: persistere i breakpoint nello storage del browser o dentro il documento JSON.
-2. Caricamento **tollerante**: se il `.bkpt` è assente o disallineato (sorgente modificato fuori dall'IDE), non far crashare; ignorare le righe non valide.
-3. Convertire sempre riga↔indice via `Compiler.LineToInstrMap` al momento di passarli alla CPU; non persistere gli indici istruzione (cambiano a ogni compilazione), ma i **numeri di riga**.
-4. Quando l'utente salva-con-nome o cambia formato, rigenerare/spostare anche il sidecar.
+**Bug fix `ContainerFor` (pannello Errori duplicato su compilazione):**
+- `DockFactory.ContainerFor(IDockable?)` ora percorre **ricorsivamente l'intero albero** `CurrentLayout` (via `FindContainerInTree`) invece di controllare solo i due container fissi. Se il pannello è stato spostato dall'utente in un nuovo `ToolDock` creato da Dock, viene trovato nel posto corretto e `IsPanelVisible` restituisce `true` → `SetPanelVisible(Errors, true)` è un no-op invece di aggiungere un duplicato nel container originale.
+- `DockFactory.CurrentLayout` (property interna): aggiornata dal `MainViewModel` dopo ogni assegnazione di `Layout` (costruttore + `LoadLayout`).
 
 ### Verifica
 
-- Chiudere/riaprire: layout, ultimo file e breakpoint ripristinati.
-- File recenti aggiornato e deduplicato (`AggiungiRecenti` sposta in cima).
+- Chiudere/riaprire: layout identico (proporzioni, posizioni pannelli, tab attiva), breakpoint presenti, file recenti aggiornati.
+- Spostare il pannello Errori in una nuova posizione → compilare con errori → il pannello Errori è attivato nella sua posizione corrente, non duplicato.
+- File recenti: aprire 3 file diversi → tutti e 3 nel menu Recenti, ordinati per ultimo usato.
+- Layout `.json` di formato vecchio (o assente): fallback al layout di default senza crash.
 
-### Problemi probabili
+### Assunzioni e decisioni (registrate durante l'esecuzione — 2026-06-30)
 
-- **Layout incompatibile** dopo modifiche ai ViewModel: un `layout.json` vecchio può far crashare la deserializzazione. Prevedere try/catch → fallback al layout di default + versionamento del file.
-- **`.bkpt` disallineato** se il sorgente è stato modificato fuori dall'IDE: i numeri di riga non corrispondono più. Accettabile, ma non far crashare il caricamento.
-- **`MAXFILERECENTI` non applicato**: nel codice attuale il troncamento della lista è **commentato** (`AggiungiRecenti`), quindi la lista cresce all'infinito. Decidere se ripristinare il limite.
+1. **Serializzazione layout: albero ricorsivo custom invece di `Dock.Serializer.SystemTextJson`**
+   `Dock.Serializer.SystemTextJson` richiede: (a) attributi source-gen `[DockJsonSerializable]` su tutti i tipi, (b) costruttori senza parametri su tutti i `Tool`/`Document`, (c) re-iniezione post-deserializzazione di `MainVm` e delle callback `Action`. Per evitare questa complessità si è scelto un walker ricorsivo custom (`ToDockNode`/`RebuildLayout`) che serializza la **struttura** del dock tree (tipi, proporzioni, ID pannelli) e al caricamento sostituisce gli ID con le istanze reali dei ViewModel già costruiti. Nessuna modifica ai ViewModel; nessun costruttore senza parametri richiesto.
+
+2. **`JsonNumberHandling.AllowNamedFloatingPointLiterals` obbligatorio**
+   Avalonia Dock usa `double.PositiveInfinity` come valore di proporzione per alcuni nodi (es. `RootDock`). `JsonSerializer.Serialize` di default rifiuta `Infinity` con `ArgumentException`. L'opzione `AllowNamedFloatingPointLiterals` consente di serializzarlo come stringa JSON `"Infinity"` e di deserializzarlo con la stessa opzione. Deve essere usata sia in `SaveLayout` che in `LoadLayout`.
+
+3. **Salvataggio su `Window.Closing`, non solo su `desktop.Exit`**
+   Su macOS, premere il pulsante rosso chiude la finestra ma l'applicazione rimane attiva nel dock: `IClassicDesktopStyleApplicationLifetime.Exit` non scatta mai. `Window.Closing` scatta invece in ogni caso (pulsante rosso, Cmd+Q, `ExitCommand`). L'evento `desktop.Exit` è mantenuto come backup per altri scenari (Cmd+Q, `ExitCommand`), ma `Window.Closing` è il punto di salvataggio primario su macOS.
+
+4. **`ContainerFor` deve percorrere l'intero albero**
+   Quando l'utente trascina un pannello in una nuova posizione, Dock crea nuovi nodi `ProportionalDock`/`ToolDock` nell'albero — non tracciati da `DocumentContainer`/`ToolContainer`. Cercare solo nei due container fissi fa sì che il pannello risulti "non visibile" → `AddDockable` lo aggiunge al container originale creando un duplicato. La ricerca ricorsiva su `CurrentLayout` trova il pannello ovunque si trovi nell'albero.
+
+5. **File recenti nel `NativeMenu` macOS: inserimento dinamico in codice**
+   I `NativeMenuItem` non supportano `ItemsSource` (proprietà non esiste su `NativeMenu`). Il submenu "Recenti" viene creato programmaticamente in `MainWindow.xaml.cs`: `SetupNativeRecentiMenu()` inserisce `Sep` + `NativeMenuItem("Recenti")` nel menu File a indici 4 e 5; `UpdateNativeRecentiMenu()` ripopola il submenu a ogni cambio di `RecentFileItems`. I lambda catturano `path` per evitare il problema `CommandParameter` assente su `NativeMenuItem`.
+
+6. **`ReflectionBinding` per `ItemContainerTheme` del menu Recenti**
+   Con `AvaloniaUseCompiledBindingsByDefault=true`, i binding all'interno di `ControlTheme`/`ItemContainerTheme` richiedono `x:DataType` per la compilazione. Poiché `RecentFileItem` è una classe custom non facilmente dichiarabile come DataType in un tema inline, si usa `{ReflectionBinding Header}` e `{ReflectionBinding Command}` — il binding riflessivo funziona correttamente a runtime per questo caso d'uso.
+
+7. **Numeri di riga persistiti (non indici istruzione)**
+   I breakpoint sono salvati come numeri di riga 1-based (convenzione AvaloniaEdit), non come indici istruzione. Gli indici cambiano a ogni compilazione; le righe sono stabili. La conversione riga→indice avviene solo in `SyncBreakpointsToCpu()` al momento di passarli alla CPU via `Compiler.LineToInstrMap`.
 
 ---
 
